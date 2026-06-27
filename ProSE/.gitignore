@@ -1,0 +1,22 @@
+# Secrets
+.env
+credentials.json
+token.json
+
+# Personal settings + source spec (kept local, not committed)
+config.json
+forclaude.txt
+
+# Generated data (the live spreadsheet with your manual edits + real contacts)
+data/*.xlsx
+data/*.xlsx#
+~$*.xlsx
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.scan_state.json
+
+# Scratch
+scratch_*

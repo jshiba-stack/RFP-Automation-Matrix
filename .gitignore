@@ -1,0 +1,22 @@
+# Python
+**/.venv/
+**/__pycache__/
+*.pyc
+
+# Secrets — never commit
+**/.env
+**/credentials.json
+**/token.json
+
+# Personal settings + local working docs
+**/config.json
+**/forclaude.txt
+**/.scan_state.json
+
+# Generated data (spreadsheets contain real contact info)
+**/data/*.xlsx
+**/data/*.xlsx#
+~$*.xlsx
+
+# Scratch
+**/scratch_*

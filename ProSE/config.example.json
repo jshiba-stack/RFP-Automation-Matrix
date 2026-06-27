@@ -1,0 +1,35 @@
+{
+  "keywords": [
+    "Oracle",
+    "Professional Services",
+    "SharePoint",
+    "Cloud",
+    "Information Technology",
+    "Database",
+    "Web",
+    "Analytics",
+    "Artificial Intelligence",
+    "SQL",
+    "GIS",
+    "Microsoft Fabric",
+    "Data Engineering",
+    "Cloud Data Migration",
+    "Cloud Data Architecture - Data Warehouse, Data Lake",
+    "AI Enablement",
+    "Automation RPA"
+  ],
+  "scan_schedule": { "mode": "daily", "hour": 6, "minute": 0 },
+  "email_schedule": { "days": ["Mon"], "hour": 8, "minute": 0 },
+  "email": {
+    "method": "gmail_api",
+    "sender": "",
+    "recipients": ["recipient@example.com"],
+    "subject": "Scanned Professional Services - Weekly Update",
+    "credentials_file": "credentials.json",
+    "token_file": "token.json",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587
+  },
+  "spreadsheet_path": "data/2026-2027 Scanned Professional Services.xlsx",
+  "timezone": "Pacific/Honolulu"
+}
