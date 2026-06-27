@@ -25,7 +25,6 @@ import requests
 
 from . import parser
 
-HANDS_PAGE = "https://hands.ehawaii.gov/hands/opportunities"
 HANDS_SEARCH = "https://hands.ehawaii.gov/hands/api/bidding-opportunities"
 # Public per-opportunity detail (no login) -- holds full contact info for
 # HANDS-native notices (county/UH/agency postings).

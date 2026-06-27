@@ -55,8 +55,6 @@ FIELD_TO_COL = {
     "phone": 12,
     "email": 13,
 }
-DATA_COLS = set(FIELD_TO_COL.values())
-MANUAL_COLS = [c for c in range(1, len(HEADERS) + 1) if c not in DATA_COLS]
 
 COLUMN_WIDTHS = {
     1: 12, 2: 16, 3: 20, 4: 46, 5: 13, 6: 20,
