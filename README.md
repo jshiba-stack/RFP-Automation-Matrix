@@ -58,8 +58,13 @@ python -m venv .venv
 RFP Automation Matrix/
 ├── README.md            ← this file (suite overview)
 ├── CHANGELOG.md         ← suite-level milestones (programs added/retired)
+├── LICENSE              ← MIT
 └── ProSE/               ← Professional Services Extractor
     ├── README.md
     ├── CHANGELOG.md
     └── …
 ```
+
+## License
+
+Released under the [MIT License](LICENSE).
