@@ -17,7 +17,7 @@ from .scheduler import ProseScheduler
 app = Flask(__name__)
 app.secret_key = "prose-local-dashboard"  # local-only; not security-sensitive
 
-# Shared scheduler instance (started by run.py).
+# Shared scheduler instance (started by __main__).
 scheduler = ProseScheduler()
 
 # Simple in-memory status of the most recent manual action.

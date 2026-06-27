@@ -45,7 +45,7 @@ from a local web dashboard.
 
 **Email**
 - **Gmail API (OAuth2)** as the primary method — no App Password required.
-  Includes a "Connect Gmail" dashboard flow and a `python run.py auth-email` CLI.
+  Includes a "Connect Gmail" dashboard flow and a `python -m prose auth-email` CLI.
 - **SMTP + App Password** retained as a fallback.
 - Sends the current spreadsheet as an attachment to a configurable recipient
   list.
@@ -55,7 +55,8 @@ from a local web dashboard.
   (combined time pickers with AM/PM), and email settings; "Scan now" /
   "Send email now" actions; status panel with last/next run times.
 - `start.bat` one-click Windows launcher (creates the virtualenv on first run).
-- `run.py` with `scan`, `email`, and `auth-email` subcommands for headless use.
+- `python -m prose` entry point with `scan`, `email`, and `auth-email`
+  subcommands for headless use.
 
 ### Security
 - Secrets and personal data are git-ignored and never committed:

@@ -49,7 +49,7 @@ cd ProSE
 # Windows: just double-click start.bat (creates the venv on first run)
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python run.py
+.venv\Scripts\python -m prose
 ```
 
 ## Repository layout

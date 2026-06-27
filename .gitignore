@@ -8,7 +8,8 @@
 **/credentials.json
 **/token.json
 
-# Personal settings + local working docs
+# Private config, secrets, runtime state
+**/instance/
 **/config.json
 **/forclaude.txt
 **/.scan_state.json

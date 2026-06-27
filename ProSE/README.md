@@ -20,7 +20,7 @@ schedules, and email settings.
    ```
    python -m venv .venv
    .venv\Scripts\python -m pip install -r requirements.txt
-   .venv\Scripts\python run.py
+   .venv\Scripts\python -m prose
    ```
 3. In the dashboard, set your **sender Gmail** and **App Password**, confirm the
    keywords/schedules, and click **Save settings**.
@@ -42,44 +42,51 @@ Password. Sending happens from whichever Gmail account you connect.
 
 1. **Create a Google OAuth client** (one-time): in the Google Cloud Console,
    enable the **Gmail API**, then create an **OAuth client ID → Desktop app**,
-   download it, and save it as `credentials.json` in the project root.
+   download it, and save it as `instance/credentials.json` (the `instance/`
+   folder is created on first run).
 2. In the dashboard, set the **Sender Gmail address** (the account to send from).
-3. Click **Connect Gmail** (or run `python run.py auth-email`). A browser opens;
-   **sign in as the sender account** and approve access. A `token.json` is saved
-   locally and reused thereafter.
+3. Click **Connect Gmail** (or run `python -m prose auth-email`). A browser opens;
+   **sign in as the sender account** and approve access. An
+   `instance/token.json` is saved locally and reused thereafter.
 
 The Gmail API always sends *from the account you authorize*, so the connected
 account must match the Sender address.
 
 > If your OAuth consent screen is in **Testing** mode, add the sender account as
 > a **Test user** (`APIs & Services → OAuth consent screen → Test users`),
-> otherwise Google blocks sign-in. `credentials.json` and `token.json` are
-> git-ignored and never committed.
+> otherwise Google blocks sign-in. `instance/credentials.json` and
+> `instance/token.json` are git-ignored and never committed.
 
 ### SMTP + App Password (fallback)
 
 If you prefer SMTP, switch **Sending method** to *SMTP + App Password* in the
 dashboard, then provide a 16-char Gmail App Password
 (<https://myaccount.google.com/apppasswords>, requires 2-Step Verification). It
-is stored locally in `.env`, never in `config.json`.
+is stored locally in `instance/.env`, never in `config.json`.
 
 ## Files
 
 ```
-run.py            Entry point (dashboard, or `python run.py scan` / `email`)
 start.bat         One-click Windows launcher
-config.json       Your settings (keywords, schedules, email) — editable in the UI
-.env              Your Gmail App Password (secret, git-ignored)
-data/             The generated spreadsheet lives here
-prose/            Application code (scanner, parser, spreadsheet, emailer, scheduler, dashboard)
+requirements.txt  Python dependencies
+README.md         This file
+CHANGELOG.md      Version history
+prose/            Application code + entry point (run via `python -m prose`)
+docs/             Templates: config.example.json, .env.example
+instance/         Your private config, OAuth keys, and runtime state (git-ignored)
+data/             The generated spreadsheet (git-ignored)
 ```
+
+Entry point: `python -m prose` (started for you by `start.bat`). Subcommands:
+`python -m prose scan`, `python -m prose email`, `python -m prose auth-email`.
 
 ## Notes
 
-- **Sites:** HANDS is used as the search engine (a fast, rate-tolerant JSON API
-  that indexes HiePRO and related systems); HiePRO is the system of record we
-  read each solicitation's detail page from. Non-HiePRO results (e.g. University
-  of Hawaii) are still captured, just without contact details.
+- **Sites:** HANDS is the search engine (a fast, rate-tolerant JSON API that
+  indexes HiePRO and related systems). Contact details are pulled from the
+  HiePRO detail page for HiePRO-sourced solicitations, or the public HANDS
+  opportunity endpoint for county/UH/agency ones — so every row gets contact
+  info where the source provides it.
 - **Keyword tip:** very short/common keywords match a lot. For example `AI` and
   `Web` match many unrelated notices; prefer specific phrases (e.g.
   `Artificial Intelligence`, `Oracle`, `Microsoft Fabric`) to keep the sheet
@@ -89,6 +96,6 @@ prose/            Application code (scanner, parser, spreadsheet, emailer, sched
   Entered SF · Contact Name · Phone · Email. The app fills Solicitation #,
   Organization, Title, Published, Due Date, Contact Name, Phone, Email.
 - The dashboard must stay running for scheduled scans/emails to fire. To run it
-  unattended, leave `run.py` running (e.g. via Task Scheduler at login).
-- `python run.py scan` / `python run.py email` run a single job and exit —
+  unattended, leave `python -m prose` running (e.g. via Task Scheduler at login).
+- `python -m prose scan` / `python -m prose email` run a single job and exit —
   handy if you'd rather drive scheduling from Windows Task Scheduler.

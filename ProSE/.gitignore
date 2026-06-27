@@ -1,13 +1,8 @@
-# Secrets
-.env
-credentials.json
-token.json
+# Private config, secrets, and runtime state (config.json, .env,
+# credentials.json, token.json, .scan_state.json all live here)
+instance/
 
-# Personal settings + source spec (kept local, not committed)
-config.json
-forclaude.txt
-
-# Generated data (the live spreadsheet with your manual edits + real contacts)
+# Generated spreadsheets (contain real contact data)
 data/*.xlsx
 data/*.xlsx#
 ~$*.xlsx
@@ -16,7 +11,6 @@ data/*.xlsx#
 .venv/
 __pycache__/
 *.pyc
-.scan_state.json
 
 # Scratch
 scratch_*

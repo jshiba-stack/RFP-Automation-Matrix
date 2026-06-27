@@ -10,5 +10,5 @@ if not exist ".venv\Scripts\python.exe" (
   call ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 
-call ".venv\Scripts\python.exe" run.py
+call ".venv\Scripts\python.exe" -m prose
 pause

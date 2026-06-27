@@ -84,7 +84,7 @@ def _load_gmail_credentials(cfg: dict, allow_interactive: bool = False):
         raise EmailError(
             "Gmail account not connected (no valid token). Click "
             "“Connect Gmail” in the dashboard, or run "
-            "“python run.py auth-email”."
+            "“python -m prose auth-email”."
         )
 
     # Interactive consent flow.

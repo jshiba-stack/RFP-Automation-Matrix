@@ -1,10 +1,11 @@
 """Configuration + lightweight runtime state + secret handling for ProSE.
 
-Settings live in ``config.json`` (human-editable, also edited via the dashboard).
-The Gmail App Password is a secret and lives only in ``.env`` as
-``PROSE_SMTP_PASSWORD`` -- never written to config.json.
-Runtime status (last scan time, counts) lives in ``.scan_state.json`` so it
-never clobbers user settings.
+Private, machine-local files live in the git-ignored ``instance/`` folder:
+  * ``config.json``      -- settings (also edited via the dashboard)
+  * ``.env``             -- the Gmail App Password (``PROSE_SMTP_PASSWORD``)
+  * ``credentials.json`` / ``token.json`` -- Gmail OAuth client + token
+  * ``.scan_state.json`` -- runtime status (last scan time, counts)
+Generated spreadsheets live in the git-ignored ``data/`` folder.
 """
 
 from __future__ import annotations
@@ -15,9 +16,11 @@ from pathlib import Path
 
 # Project root = parent of this package directory.
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "config.json"
-STATE_PATH = ROOT / ".scan_state.json"
-ENV_PATH = ROOT / ".env"
+# Private, machine-local files (config, secrets, runtime state) live here.
+INSTANCE = ROOT / "instance"
+CONFIG_PATH = INSTANCE / "config.json"
+STATE_PATH = INSTANCE / ".scan_state.json"
+ENV_PATH = INSTANCE / ".env"
 
 SECRET_KEY = "PROSE_SMTP_PASSWORD"
 
@@ -110,6 +113,7 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
+    INSTANCE.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2)
 
@@ -122,6 +126,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
+    INSTANCE.mkdir(parents=True, exist_ok=True)
     with open(STATE_PATH, "w", encoding="utf-8") as fh:
         json.dump(state, fh, indent=2)
 
@@ -158,6 +163,7 @@ def get_smtp_password() -> str:
 
 def set_smtp_password(password: str) -> None:
     """Persist the App Password to .env and the live process environment."""
+    INSTANCE.mkdir(parents=True, exist_ok=True)
     lines = []
     found = False
     if ENV_PATH.exists():
@@ -178,17 +184,14 @@ def spreadsheet_abspath(cfg: dict) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
-def _resolve(path_str: str) -> Path:
-    p = Path(path_str)
-    return p if p.is_absolute() else ROOT / p
-
-
 def credentials_path(cfg: dict) -> Path:
-    return _resolve(cfg["email"].get("credentials_file", "credentials.json"))
+    p = Path(cfg["email"].get("credentials_file", "credentials.json"))
+    return p if p.is_absolute() else INSTANCE / p.name
 
 
 def token_path(cfg: dict) -> Path:
-    return _resolve(cfg["email"].get("token_file", "token.json"))
+    p = Path(cfg["email"].get("token_file", "token.json"))
+    return p if p.is_absolute() else INSTANCE / p.name
 
 
 def dow_tokens(days: list[str]) -> str:

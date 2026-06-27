@@ -1,10 +1,10 @@
 """ProSE entry point.
 
 Usage:
-    python run.py            Start the dashboard + scheduler (default).
-    python run.py scan       Run a single scan now and exit (for manual/cron use).
-    python run.py email      Send the spreadsheet now and exit.
-    python run.py auth-email Connect a Gmail account (opens browser consent).
+    python -m prose            Start the dashboard + scheduler (default).
+    python -m prose scan       Run a single scan now and exit (for manual/cron use).
+    python -m prose email      Send the spreadsheet now and exit.
+    python -m prose auth-email Connect a Gmail account (opens browser consent).
 
 The dashboard runs locally at http://127.0.0.1:5000.
 """
@@ -15,7 +15,7 @@ import sys
 import threading
 import webbrowser
 
-from prose import config, emailer, jobs
+from . import config, emailer, jobs
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -35,7 +35,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     # Default: dashboard + background scheduler.
-    from prose.app import app, scheduler
+    from .app import app, scheduler
 
     scheduler.start()
     print(f"ProSE dashboard running at http://{HOST}:{PORT}  (Ctrl+C to stop)")
