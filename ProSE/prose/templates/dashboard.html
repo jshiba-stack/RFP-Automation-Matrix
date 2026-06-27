@@ -73,11 +73,11 @@
           </div>
           <div class="row" style="margin-top:6px">
             <div>
-              <label for="scan_time">Time (HST)</label>
+              <label for="scan_time">Time</label>
               <input type="time" id="scan_time" name="scan_time" value="{{ '%02d:%02d'|format(cfg.scan_schedule.hour, cfg.scan_schedule.minute) }}">
             </div>
           </div>
-          <div class="hint">Pick a time (AM/PM). Every-12h also runs 12 hours later.</div>
+          <div class="hint">Pick a time (AM/PM), in this PC's local time. Every-12h also runs 12 hours later.</div>
         </div>
 
         <!-- Schedule 2: email -->
@@ -92,9 +92,24 @@
           </div>
           <div class="row" style="margin-top:6px">
             <div>
-              <label for="email_time">Time (HST)</label>
+              <label for="email_time">Time</label>
               <input type="time" id="email_time" name="email_time" value="{{ '%02d:%02d'|format(cfg.email_schedule.hour, cfg.email_schedule.minute) }}">
             </div>
+          </div>
+          <div class="hint">In this PC's local time.</div>
+        </div>
+
+        <!-- Automation note -->
+        <div class="card full">
+          <h2>Automation</h2>
+          <div class="hint">
+            On <b>Save settings</b>, ProSE registers two <b>Windows Task Scheduler</b>
+            jobs (<code>ProSE-Scan</code>, <code>ProSE-Email</code>) that run on the
+            schedules above &mdash; so scans and emails fire <b>even when this
+            dashboard is closed</b>, and they survive reboots. The PC just needs to
+            be powered on (and this user logged in) at the scheduled time. The
+            &ldquo;Next scan / Next email&rdquo; times above are read straight from
+            Task Scheduler.
           </div>
         </div>
 
@@ -160,7 +175,7 @@
       </div>
     </form>
 
-    <div class="footer">ProSE runs locally &middot; spreadsheet: {{ cfg.spreadsheet_path }} &middot; times in {{ cfg.timezone }}</div>
+    <div class="footer">ProSE runs locally &middot; spreadsheet: {{ cfg.spreadsheet_path }} &middot; schedules run via Windows Task Scheduler (PC local time)</div>
   </main>
 
   <script>

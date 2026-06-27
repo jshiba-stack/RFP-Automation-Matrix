@@ -4,6 +4,32 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-06-27
+
+Scheduling moves to Windows Task Scheduler so scans/emails run with the dashboard
+closed, plus UI and lifecycle polish.
+
+### Changed
+- **Scheduling now uses Windows Task Scheduler** instead of an in-process
+  scheduler. Saving settings registers/updates two tasks (`ProSE-Scan`,
+  `ProSE-Email`) that call the new `run_task.bat`, so scans and emails fire even
+  when the dashboard is closed and survive reboots. Task times use the PC's local
+  time zone; the dashboard's next-run readouts come from Task Scheduler. The old
+  APScheduler path is kept as a fallback on non-Windows platforms.
+
+### Added
+- `run_task.bat` — wrapper the scheduled tasks invoke to run a single
+  `scan`/`email` job in the project's virtualenv.
+- `prose/winsched.py` — registers, updates, and queries the Windows tasks.
+- `python -m prose unschedule` — removes the scheduled tasks (a full kill switch
+  for all background activity).
+
+### Fixed
+- Time pickers (Schedule 1/2) now use the app's teal theme instead of raw
+  browser styling.
+- Dashboard helper thread (browser auto-open) is now a daemon so it can never
+  keep the process alive after the window is closed.
+
 ## [0.1.0] — 2026-06-27
 
 Initial release. ProSE scans Hawaii procurement sources for active
@@ -64,4 +90,5 @@ from a local web dashboard.
   spec, and the generated spreadsheet (real contact data). A
   `config.example.json` template is provided instead.
 
+[0.2.0]: https://semver.org/
 [0.1.0]: https://semver.org/

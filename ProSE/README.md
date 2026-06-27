@@ -35,6 +35,32 @@ schedules, and email settings.
 
 You can also trigger **Scan now** / **Send email now** from the dashboard.
 
+### Automatic scheduling (Windows Task Scheduler)
+
+When you click **Save settings**, ProSE registers two **Windows Task Scheduler**
+jobs from your schedules:
+
+- `ProSE-Scan` → `run_task.bat scan`
+- `ProSE-Email` → `run_task.bat email`
+
+This means scans and emails fire **even when the dashboard is closed**, and they
+survive reboots — you do **not** need to leave anything running. The PC just
+needs to be powered on (and this Windows user logged in) at the scheduled time.
+Schedule times use the **PC's local time zone**. The dashboard's *Next scan /
+Next email* readouts come straight from Task Scheduler.
+
+> The tasks run for the current user and only when that user is logged on (no
+> admin rights needed). To run while logged off, edit the two tasks in Task
+> Scheduler and set *"Run whether user is logged on or not"* (Windows will ask
+> for your password). On non-Windows machines, scheduling falls back to an
+> in-process scheduler that only runs while the dashboard is open.
+
+**Closing the dashboard leaves nothing running.** On Windows the dashboard has no
+background threads — closing the window/terminal exits the process completely.
+The only thing left is the two *dormant* scheduled tasks, which consume no
+resources until their scheduled time, run for a few seconds, and exit. To stop
+those too (a complete kill switch), run `python -m prose unschedule`.
+
 ## Email setup (Gmail OAuth — recommended)
 
 ProSE sends via the **Gmail API using OAuth2**, so you do **not** need an App
@@ -68,6 +94,7 @@ is stored locally in `instance/.env`, never in `config.json`.
 
 ```
 start.bat         One-click Windows launcher
+run_task.bat      Wrapper the Windows scheduled tasks call (scan / email)
 requirements.txt  Python dependencies
 README.md         This file
 CHANGELOG.md      Version history
@@ -78,7 +105,8 @@ data/             The generated spreadsheet (git-ignored)
 ```
 
 Entry point: `python -m prose` (started for you by `start.bat`). Subcommands:
-`python -m prose scan`, `python -m prose email`, `python -m prose auth-email`.
+`python -m prose scan`, `python -m prose email`, `python -m prose auth-email`,
+`python -m prose unschedule` (removes the scheduled tasks — a full kill switch).
 
 ## Notes
 
@@ -95,7 +123,7 @@ Entry point: `python -m prose` (started for you by `start.bat`). Subcommands:
   Solicitation Title · Published · Due Date · Pursue · Emailed · Status ·
   Entered SF · Contact Name · Phone · Email. The app fills Solicitation #,
   Organization, Title, Published, Due Date, Contact Name, Phone, Email.
-- The dashboard must stay running for scheduled scans/emails to fire. To run it
-  unattended, leave `python -m prose` running (e.g. via Task Scheduler at login).
-- `python -m prose scan` / `python -m prose email` run a single job and exit —
-  handy if you'd rather drive scheduling from Windows Task Scheduler.
+- On Windows the dashboard does **not** need to stay open — scheduling is handled
+  by Windows Task Scheduler (registered on Save). See *Automatic scheduling* above.
+- `python -m prose scan` / `python -m prose email` run a single job and exit. The
+  scheduled tasks use these via `run_task.bat`; you can also run them by hand.
