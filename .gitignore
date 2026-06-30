@@ -19,5 +19,17 @@
 **/data/*.xlsx#
 ~$*.xlsx
 
+# Sample / business documents (proposals, forms, notices, exports) — never commit.
+# These are confidential deliverables; keep them out of the (public) repo.
+*.zip
+*.pdf
+*.doc
+*.docx
+*.xlsx
+
+# Reference materials / firm data folders
+**/assets/refs/
+**/data/
+
 # Scratch
 **/scratch_*

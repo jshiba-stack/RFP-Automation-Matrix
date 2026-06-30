@@ -1,0 +1,9 @@
+python-docx>=1.1.0
+PyYAML>=6.0
+pdfplumber>=0.11.0
+pypdf>=4.0.0
+Flask>=3.0.0
+docxcompose>=1.4.0
+# Optional, Windows + Word only; used solely to MEASURE the exported PDF
+# (size / page count). The authoritative export is still the user's own.
+# docx2pdf>=0.1.8

@@ -1,0 +1,16 @@
+# Virtual environment
+.venv/
+
+# Private, machine-local config / runtime state
+instance/
+
+# Generated drafts and working data stores (contain business content)
+data/
+
+# Reference proposals + firm materials (business content / PII -- keep out of the repo)
+assets/refs/
+
+# Python bytecode
+__pycache__/
+*.pyc
+.pytest_cache/

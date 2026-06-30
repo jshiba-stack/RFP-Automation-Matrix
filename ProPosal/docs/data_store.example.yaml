@@ -1,0 +1,110 @@
+# ProPosal data store (example).
+#
+# The single source of truth for the variable content of a submittal. Copy this
+# to data/stores/store.yaml and replace the placeholders below with your real
+# firm/personnel/project data. You can also split it across several files
+# (config.data_store_paths is a list) -- e.g. a stable firm.yaml plus a per-year
+# opportunity_FY2027.yaml, one possibly living in OneDrive. They are deep-merged
+# in order; lists (projects, personnel, etc.) merge by `id`.
+#
+# In PRIMARY (smart copy-and-update) mode the store mainly supplies the target
+# fiscal year and cover date, and lets ProPosal flag store entries that have no
+# home in last year's document. The full set of entities below also feeds
+# generate-from-data-store mode and the form-fillers.
+#
+# All values here are FICTIONAL placeholders -- not real firm data.
+
+firm:
+  legal_name: "Acme Consulting Group"
+  dba: "Acme Professional Services, LLC"
+  address_lines:
+    - "123 Example Ave, Suite 100"
+    - "Honolulu, HI 96800"
+  website: "www.example.test"
+  letter_contact_name: "Acme Professional Services"
+  signatory:
+    name: "Jordan Avery"
+    title: "V.P. of Technology"
+    phone: "(808) 555-0100"
+
+opportunity:
+  agency: "City and County of Honolulu"
+  department: "DIT"
+  department_full: "Department of Information Technology (DIT)"
+  fiscal_year: 2027          # PRIMARY mode bumps the doc to this year
+  cover_date:                # blank -> today's date at build time; or "2026-03-02"
+  due_date: "2026-03-31"
+  required_form: "general"   # "general" (DIT docx) | "SF330" | "DPW-120"
+  page_limit: 30
+  pdf_size_cap_mb: 3.0
+  selected_categories: ["1", "2", "3", "4", "6", "11", "16", "25"]
+
+# I. Categories table (DIT # / Category / Description). Used by generate mode.
+categories:
+  - id: cat-1
+    dit_number: "1"
+    name: "Computer Science, GS-1550"
+    technologies: ["Oracle", "MS SQL Server", "PostgreSQL", "MySQL", "MongoDB"]
+
+# II. Professional Qualifications + resume index. Also feeds SF330 Section E.
+personnel:
+  - id: avery
+    name: "Jordan Avery"
+    role: "Senior Project Manager, PMP"
+    qualifications: "PMP-certified senior project manager; 20+ yrs IT delivery."
+    years_experience: 20
+    resume_docx: "resumes/avery.docx"
+  - id: rivera
+    name: "Sam Rivera"
+    role: "Senior Developer"
+    qualifications: "Full-stack senior developer."
+    resume_docx: "resumes/rivera.docx"
+
+# IV. Capacity / Project Listing (Client / Project / Start / End).
+# end: "ongoing" -> renders "<as-of-year>+" and is auto-refreshed each cycle;
+# a literal year (e.g. 2024) is a completed project and is left as-is.
+projects:
+  - id: client-a-dba
+    client: "City Department of Technology"
+    project: "Database Administration"
+    start_year: 2015
+    end: "ongoing"
+  - id: client-b-web
+    client: "Regional Public Agency"
+    project: "Web Site Development"
+    start_year: 2020
+    end: "ongoing"
+  - id: client-c-gis
+    client: "State Transportation Agency"
+    project: "GIS / IT Portal Development"
+    start_year: 2004
+    end: "ongoing"
+  - id: client-d-dba
+    client: "Regional Services Provider"
+    project: "Database Administration"
+    start_year: 2019
+    end: 2024
+  - id: client-e-pp
+    client: "Regional Utility Company"
+    project: "Power Platform / SharePoint Development"
+    start_year: 2021
+    end: 2023
+
+# III. Past Performance (one block per engagement). Client names must match the
+# base document's block headers, or ProPosal flags them as "ADD MANUALLY".
+past_performance:
+  - id: pp-a
+    client: "City Department of Technology"
+  - id: pp-b
+    client: "Regional Public Agency"
+  - id: pp-c
+    client: "State Transportation Agency"
+  - id: pp-d
+    client: "Community Nonprofit"
+  - id: pp-e
+    client: "Healthcare Group"
+  - id: pp-f
+    client: "University Foundation"
+
+# V. Additional Criteria -- static narrative (kept as-is in PRIMARY mode).
+additional_criteria: ""

@@ -1,0 +1,356 @@
+{%- macro store_select(stores) -%}
+  <select name="store" {{ 'multiple size=3' if stores|length > 1 else '' }}>
+    {% if not stores %}<option value="">— no data store in the folder —</option>{% endif %}
+    {% for s in stores %}<option value="{{ s.path }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  {% if stores|length > 1 %}<div class="hint">Ctrl-click to combine several (e.g. firm + per-year).</div>{% endif %}
+{%- endmacro -%}
+{%- macro resumes_field(id, resumes_dir) -%}
+  <label>Resumes folder (optional — cross-checks personnel &amp; appends resumes)</label>
+  <div class="row">
+    <div style="flex:3;"><input type="text" name="resumes_dir" id="{{ id }}" value="{{ resumes_dir or '' }}" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Resumes"></div>
+    <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('{{ id }}')">📁</button></div>
+  </div>
+{%- endmacro -%}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProPosal — Proposal Builder</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <h1>ProPosal</h1>
+        <span class="sub">Professional Services Proposal Builder</span>
+      </div>
+      <span class="badge">v{{ version }}</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div id="banner" class="banner {{ 'run' if action.running else ('done' if action.message and action.ok else ('err' if action.message else '')) }}">
+      {% if action.running %}<span class="spinner"></span>{% endif %}{{ action.message or '' }}
+    </div>
+
+    <!-- STEP 1: MATERIALS SOURCE -->
+    <div class="card full" style="margin-bottom:20px;">
+      <h2><span class="step">1</span>Materials source</h2>
+      <p class="lead">
+        Point ProPosal at the folder with your past submittals, templates, and data store.
+        For a <strong>SharePoint</strong> library: open it in your browser and click
+        <strong>Sync</strong> (or <strong>Add shortcut to OneDrive</strong>) &mdash; it then appears as a
+        local folder under <code class="mono">OneDrive&nbsp;-&nbsp;&lt;Org&gt;</code>, using your existing
+        sign-in &amp; permissions. Add that folder below. OneDrive and plain local folders work the same way.
+      </p>
+
+      <div class="tabs">
+        {% for s in sources %}
+          <a class="tab {{ 'active' if s.name == active else '' }}" href="{{ url_for('select_source', name=s.name) }}">{{ s.name }}</a>
+        {% endfor %}
+        <button type="button" class="tab add" onclick="toggleAdd()">＋ Add source</button>
+      </div>
+
+      {% if workspace %}
+        <div class="folderbar">
+          <code class="mono path">{{ workspace }}</code>
+          <form method="post" action="{{ url_for('remove_source') }}" onsubmit="return confirm('Remove this source from ProPosal? (your files are not touched)')" style="display:inline;">
+            <input type="hidden" name="name" value="{{ active }}">
+            <button class="btn btn-ghost" type="submit">Remove</button>
+          </form>
+        </div>
+        {% if scan_error %}
+          <div class="hint" style="color:var(--red);">{{ scan_error }}</div>
+        {% else %}
+          <div class="hint">Found <strong>{{ docx|length }}</strong> document(s) and
+            <strong>{{ stores|length }}</strong> data store(s) in this source.</div>
+        {% endif %}
+      {% elif not sources %}
+        <p class="empty">No source linked yet — click <strong>＋ Add source</strong> to connect your SharePoint, OneDrive, or local folder.</p>
+      {% endif %}
+
+      <div id="addPanel" class="addpanel" style="display:{{ 'block' if not sources else 'none' }};">
+        {% if suggestions %}
+          <label>Quick picks detected on this PC</label>
+          <div class="chips">
+            {% for sug in suggestions %}
+              <button type="button" class="chip" onclick="fillSource('{{ sug.path|replace('\\','\\\\') }}', '{{ sug.name }}')">{{ sug.kind }} · {{ sug.name }}</button>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <form method="post" action="{{ url_for('add_source') }}">
+          <label>Folder path</label>
+          <div class="row">
+            <div style="flex:3;">
+              <input type="text" name="path" id="srcPath" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Shared Documents\Proposals">
+            </div>
+            <div style="flex:0 0 auto;">
+              <button class="btn btn-accent" type="button" onclick="openBrowserFor('srcPath')">📁 Browse…</button>
+            </div>
+          </div>
+          <label>Name this source</label>
+          <input type="text" name="name" id="srcName" placeholder="e.g. Honolulu RFPs (SharePoint)">
+          <div class="actions"><button class="btn btn-primary" type="submit">Save source</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- DRAFT FROM VERSION (smart copy-and-update) -->
+      <div class="card">
+        <h2><span class="step">2a</span>Draft from Version</h2>
+        <p class="lead">Open last year's FINAL and refresh the variable fields (fiscal year, dates,
+          ongoing project end-dates), flagging everything else for your review.</p>
+        <form method="post" action="{{ url_for('build') }}">
+          <label>Version to update from</label>
+          <select name="base" required>
+            {% if not docx %}<option value="">— no .docx found in the folder —</option>{% endif %}
+            {% for d in docx %}
+              <option value="{{ d.path }}">{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <label>Data store (optional — for target year &amp; flags)</label>
+          {{ store_select(stores) }}
+          <div class="row">
+            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="detected + 1" min="2000" max="2100"></div>
+            <div><label>Cover date</label><input type="date" name="date"></div>
+          </div>
+          <div class="hint">Leave year/date blank to use the data store, or detected year + 1 and today.</div>
+          {{ resumes_field('buildResumes', resumes_dir) }}
+          <div class="actions"><button class="btn btn-primary" type="submit">Build draft</button></div>
+        </form>
+      </div>
+
+      <!-- GENERATE FROM TEMPLATE / DATA STORE -->
+      <div class="card">
+        <h2><span class="step">2b</span>Generate from Template / Data Store</h2>
+        <p class="lead">Assemble a fresh draft: the template supplies the layout and static text; the
+          data store fills the Capacity &amp; Qualifications tables and the dates.</p>
+        <form method="post" action="{{ url_for('generate') }}">
+          <label>Data store</label>
+          {{ store_select(stores) }}
+          <label>Template</label>
+          <select name="template">
+            {% if not docx %}<option value="">— no .docx found in the folder —</option>{% endif %}
+            {% for d in docx %}
+              <option value="{{ d.path }}" {{ 'selected' if d.kind == 'template' else '' }}>{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="row">
+            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="from store" min="2000" max="2100"></div>
+            <div><label>Cover date</label><input type="date" name="date"></div>
+          </div>
+          <div class="hint">A FINAL works fine as a template if you don't have a dedicated one.</div>
+          {{ resumes_field('genResumes', resumes_dir) }}
+          <div class="actions"><button class="btn btn-accent" type="submit">Generate from store</button></div>
+        </form>
+      </div>
+
+      <!-- VALIDATE AGAINST THE CITY NOTICE -->
+      <div class="card full">
+        <h2><span class="step">2c</span>Validate against the City notice (requirements)</h2>
+        <p class="lead">Cross-check your data store against the City's annual notice PDF: fiscal year,
+          submittal deadline, attachment size cap, required form (e.g. SF330 for some departments), and
+          whether your selected categories are actually listed for your department. Flag-only.</p>
+        {% if notice_pdf %}
+          <div class="hint">Notice found: <code class="mono">{{ notice_pdf }}</code></div>
+        {% else %}
+          <div class="hint" style="color:var(--amber);">No notice PDF found in your source folder — drop the
+            <code class="mono">Professional-Services-Annual-Ad-Fiscal-Year-….pdf</code> in there.</div>
+        {% endif %}
+        <form method="post" action="{{ url_for('validate') }}">
+          <input type="hidden" name="notice_pdf" value="{{ notice_pdf }}">
+          <div class="row">
+            <div style="flex:3;"><label>Data store</label>{{ store_select(stores) }}</div>
+            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="from store" min="2000" max="2100"></div>
+          </div>
+          <div class="actions"><button class="btn btn-cyan" type="submit" {{ 'disabled' if not notice_pdf else '' }}>Validate vs notice</button></div>
+        </form>
+
+        {% if validation %}
+          <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:14px;">
+            <h3 class="subh">Result — {{ validation.pdf_name }}
+              {% if validation.fiscal_year %}· FY{{ validation.fiscal_year }}{% endif %}
+              {% if validation.deadline %}· deadline {{ validation.deadline }}{% endif %}</h3>
+            {% for status, name, detail in validation.checks %}
+              <div class="chk"><span class="mark {{ status }}">{{ '✓' if status=='PASS' else ('!' if status=='WARN' else '×') }}</span>
+                <span><span class="name">{{ name }}</span>{% if detail %} <span class="detail">— {{ detail }}</span>{% endif %}</span></div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- FILL A FORM (SF330 / DPW-120) -->
+      <div class="card full">
+        <h2><span class="step">2d</span>Fill a form (SF330 / DPW-120)</h2>
+        <p class="lead">Fill a fillable PDF form from the data store. Each form has a default blank template;
+          override it with your own, and optionally upload a previously-filled copy to carry values forward
+          (matched by field name) — anything that doesn't line up is flagged.</p>
+        <form method="post" action="{{ url_for('fill') }}">
+          <div class="row">
+            <div>
+              <label>Form</label>
+              <select name="form_key" id="formKey">
+                {% for s in form_specs %}<option value="{{ s.key }}">{{ s.key }} — {{ s.name }}</option>{% endfor %}
+              </select>
+            </div>
+            <div style="flex:2;"><label>Data store</label>{{ store_select(stores) }}</div>
+          </div>
+          <label>Template override (optional — full path to a fillable PDF; blank uses the form's default)</label>
+          <input type="text" name="template" placeholder="e.g. C:\Users\you\OneDrive - Acme\Forms\SF330-fillable.pdf">
+          <label>Previously-filled form (optional — full path; carries matching fields forward)</label>
+          <input type="text" name="prev_filled" placeholder="a prior filled copy of this form (.pdf)">
+          <div class="hint">DPW-120 is fillable today. SF330's bundled PDF is flat — provide a fillable SF330 template to use it.</div>
+          <div class="actions"><button class="btn btn-cyan" type="submit">Fill form</button></div>
+        </form>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="card full">
+        <h2><span class="step">3</span>Latest result{% if result %} — {{ result.kind }}{% endif %}</h2>
+        {% if not result %}
+          <p class="empty">Run a build or generate to see the flag report and checks here.</p>
+        {% else %}
+          <div class="dl">
+            {% if result.output_name %}<a class="btn btn-cyan" href="{{ url_for('download', name=result.output_name) }}">⬇ {{ 'Filled PDF' if result.output_name.endswith('.pdf') else 'Draft .docx' }}</a>{% endif %}
+            {% if result.flags_name %}<a class="btn btn-ghost" href="{{ url_for('download', name=result.flags_name) }}">⬇ Flag report</a>{% endif %}
+            {% if result.checks_name %}<a class="btn btn-ghost" href="{{ url_for('download', name=result.checks_name) }}">⬇ Checks report</a>{% endif %}
+          </div>
+          {% if result.compliance or result.format %}
+          <div class="grid" style="margin-top:18px;">
+            <div>
+              <h3 class="subh">Compliance checklist</h3>
+              {% for status, name, detail in result.compliance %}
+                <div class="chk"><span class="mark {{ status }}">{{ '✓' if status=='PASS' else ('!' if status=='WARN' else '×') }}</span>
+                  <span><span class="name">{{ name }}</span>{% if detail %} <span class="detail">— {{ detail }}</span>{% endif %}</span></div>
+              {% endfor %}
+            </div>
+            <div>
+              <h3 class="subh">Format check</h3>
+              {% for status, name, detail in result.format %}
+                <div class="chk"><span class="mark {{ status }}">{{ '✓' if status=='PASS' else ('!' if status=='WARN' else '×') }}</span>
+                  <span><span class="name">{{ name }}</span>{% if detail %} <span class="detail">— {{ detail }}</span>{% endif %}</span></div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          <h3 class="subh" style="margin-top:18px;">Flags to review ({{ result.flags|length }})</h3>
+          {% if result.flags %}
+            <table class="report"><tr><th>Kind</th><th>Where</th><th>Detail</th><th>Value</th></tr>
+              {% for kind, loc, summary, new in result.flags %}
+                <tr><td><span class="pill warnk">{{ kind }}</span></td><td>{{ loc }}</td><td>{{ summary }}</td><td>{% if new %}<code class="mono">{{ new }}</code>{% endif %}</td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">No flags — clean run.</p>{% endif %}
+          <h3 class="subh" style="margin-top:18px;">Applied changes ({{ result.applied|length }})</h3>
+          {% if result.applied %}
+            <table class="report"><tr><th>Where</th><th>Change</th><th>Old</th><th>New</th></tr>
+              {% for loc, summary, old, new in result.applied %}
+                <tr><td>{{ loc }}</td><td>{{ summary }}</td><td>{% if old %}<code class="mono">{{ old }}</code>{% endif %}</td><td>{% if new %}<code class="mono">{{ new }}</code>{% endif %}</td></tr>
+              {% endfor %}
+            </table>
+          {% else %}<p class="empty">No applied changes recorded.</p>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="footer">ProPosal v{{ version }} · part of the RFP Automation Matrix · runs locally on your machine ·
+      page limit and PDF size cap are applied automatically (City &amp; County standard)</p>
+  </main>
+
+  <!-- FOLDER BROWSER MODAL -->
+  <div id="modal" class="modal-bg" onclick="if(event.target===this)closeBrowser()">
+    <div class="modal">
+      <div class="modal-head">
+        <strong>Choose a folder</strong>
+        <button class="x" type="button" onclick="closeBrowser()">×</button>
+      </div>
+      <div class="modal-path"><code class="mono" id="mPath">—</code></div>
+      <div id="mList" class="modal-list"></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" type="button" onclick="closeBrowser()">Cancel</button>
+        <button class="btn btn-primary" type="button" onclick="chooseFolder()">Use this folder</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- add-source panel ---
+    function toggleAdd() {
+      const p = document.getElementById('addPanel');
+      p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
+    }
+    function fillSource(path, name) {
+      document.getElementById('srcPath').value = path;
+      const nm = document.getElementById('srcName');
+      if (!nm.value) nm.value = name;
+      document.getElementById('addPanel').style.display = 'block';
+    }
+
+    // --- folder browser (targets any input id) ---
+    const modal = document.getElementById('modal');
+    let curDir = '';
+    let browseTarget = 'srcPath';
+    function openBrowserFor(id) { browseTarget = id; openBrowser(); }
+    function openBrowser() {
+      modal.style.display = 'flex';
+      const cur = document.getElementById(browseTarget);
+      browse((cur && cur.value) || curDir || '');
+    }
+    function closeBrowser() { modal.style.display = 'none'; }
+    function chooseFolder() {
+      const target = document.getElementById(browseTarget);
+      if (curDir && target) target.value = curDir;
+      if (browseTarget === 'srcPath' && curDir) {
+        const nm = document.getElementById('srcName');
+        if (nm && !nm.value) nm.value = curDir.split(/[\\/]/).filter(Boolean).pop() || '';
+        document.getElementById('addPanel').style.display = 'block';
+      }
+      closeBrowser();
+    }
+    async function browse(dir) {
+      const r = await fetch('{{ url_for("api_browse") }}?dir=' + encodeURIComponent(dir || ''));
+      const d = await r.json();
+      curDir = d.dir || '';
+      document.getElementById('mPath').textContent = d.dir || 'This PC';
+      const list = document.getElementById('mList');
+      list.innerHTML = '';
+      if (d.parent !== null && d.parent !== undefined) {
+        list.appendChild(folderRow('⬆  ..', d.parent));
+      }
+      (d.folders || []).forEach(f => list.appendChild(folderRow('📁  ' + f.name, f.path)));
+      if (d.error) { const e = document.createElement('div'); e.className='hint'; e.style.color='var(--red)'; e.textContent=d.error; list.appendChild(e); }
+    }
+    function folderRow(label, path) {
+      const a = document.createElement('button');
+      a.type = 'button'; a.className = 'frow'; a.textContent = label;
+      a.onclick = () => browse(path);
+      return a;
+    }
+
+    // --- live status polling ---
+    let wasRunning = {{ 'true' if action.running else 'false' }};
+    const banner = document.getElementById('banner');
+    async function poll() {
+      try {
+        const r = await fetch('{{ url_for("status_json") }}', {cache: 'no-store'});
+        const s = await r.json();
+        banner.className = 'banner ' + (s.running ? 'run' : (s.message ? (s.ok ? 'done' : 'err') : ''));
+        banner.innerHTML = (s.running ? '<span class="spinner"></span>' : '') + (s.message || '');
+        if (wasRunning && !s.running) { location.reload(); return; }
+        wasRunning = s.running;
+      } catch (e) {}
+    }
+    setInterval(poll, 2000);
+  </script>
+</body>
+</html>

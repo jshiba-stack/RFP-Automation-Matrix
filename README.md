@@ -13,7 +13,8 @@ opportunities.
 
 | Program | What it does | Status |
 |---------|--------------|--------|
-| [**ProSE**](ProSE/) — Professional Services Extractor | Scans Hawaii procurement sources (HANDS + HiePRO) for active solicitations matching your keywords, records them into a styled Excel spreadsheet with full contact details, and emails it on a schedule. Includes a local web dashboard. | ✅ v0.1.0 |
+| [**ProSE**](ProSE/) — Professional Services Extractor | Scans Hawaii procurement sources (HANDS + HiePRO) for active solicitations matching your keywords, records them into a styled Excel spreadsheet with full contact details, and emails it on a schedule. Includes a local web dashboard. | ✅ v0.2.0 |
+| [**ProPosal**](ProPosal/) — Professional Services Proposal Builder | Builds the City & County of Honolulu annual submittal: opens last year's FINAL `.docx` and auto-refreshes the variable fields (fiscal year, dates, ongoing project end-dates) flagging the rest, or generates a fresh draft from a data store (rebuilding the Capacity and Qualifications tables) — preserving formatting throughout. Runs a compliance checklist + format check on every draft. Local web dashboard, with resume cross-verification, validation against the City's annual notice PDF, and a PDF form-fill framework (DPW-120 today; SF330 pending a fillable template). | 🚧 v0.7.0 |
 | _(more to come)_ | | |
 
 ## How it fits together
@@ -25,8 +26,11 @@ opportunities.
                  └────────────────────────────────────────────┘
                                       │
                                       ▼
-                        (future programs build on the
-                         tracked opportunity data)
+                 ┌────────────────────────────────────────────┐
+   Pursue a      │  ProPosal — build + refresh the submittal     │
+   shortlisted ▶ │  (last year's FINAL .docx  →  updated draft  │
+   opportunity   │   + flags;  data store  →  generate)         │
+                 └────────────────────────────────────────────┘
 ```
 
 ## Conventions
@@ -59,7 +63,11 @@ RFP Automation Matrix/
 ├── README.md            ← this file (suite overview)
 ├── CHANGELOG.md         ← suite-level milestones (programs added/retired)
 ├── LICENSE              ← MIT
-└── ProSE/               ← Professional Services Extractor
+├── ProSE/               ← Professional Services Extractor
+│   ├── README.md
+│   ├── CHANGELOG.md
+│   └── …
+└── ProPosal/             ← Professional Services Proposal Builder
     ├── README.md
     ├── CHANGELOG.md
     └── …

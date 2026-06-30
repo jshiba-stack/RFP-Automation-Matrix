@@ -5,6 +5,26 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-06-30
+
+### Added
+- **ProPosal** (Professional Services Proposal Builder) **v0.7.0** — the second
+  program in the suite. Builds the City & County of Honolulu annual submittal:
+  smart copy-and-update from last year's FINAL, generate-from-data-store (with a
+  store extractor), an automatic compliance checklist + format checker, an
+  ocean-blue local dashboard sourcing files from OneDrive/SharePoint-synced
+  folders, resume cross-verification, validation against the annual notice PDF,
+  and a PDF form-fill framework (DPW-120 today; SF330 pending a fillable
+  template). See [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md).
+- Design note for a future, privacy-preserving local-LLM (Ollama) requirements
+  check ([ProPosal/docs/phase6-requirements-llm.md](ProPosal/docs/phase6-requirements-llm.md)).
+
+### Changed
+- Hardened the root `.gitignore` to keep all business documents (proposals,
+  forms, notices, exports) and firm/reference data out of the public repo. The
+  bundled example data store and tests use **fictional placeholder data only** —
+  no firm, personnel, client, or contact details.
+
 ## 2026-06-27
 
 ### Added
