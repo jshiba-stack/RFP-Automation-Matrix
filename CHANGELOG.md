@@ -5,6 +5,17 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-02
+
+### Added
+- **Adopted the tool-neutral `docs/` memory framework** at the suite root
+  (context / decisions / plans / sessions / audits / runbooks + a context-contract
+  and `CLAUDE.md`/`AGENTS.md` entry points). Authored a rich
+  `docs/context/current-state.md` and three decision records (program-suite
+  structure, public-repo privacy posture, ProPosal dual-mode build). Working notes
+  (`docs/sessions/`, `docs/audits/`) are git-ignored — important since this repo is
+  public. `docs/` complements this changelog; it does not replace it.
+
 ## 2026-06-30
 
 ### Added

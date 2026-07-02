@@ -33,3 +33,16 @@
 
 # Scratch
 **/scratch_*
+
+# === docs/ framework — private working notes (BEGIN, managed by documentation skill) ===
+# These stay local and are NEVER pushed to GitHub, in every project, public or
+# private, so the private set is identical everywhere. Templates stay tracked so
+# the structure is still visible. Session handoffs are also mirrored to the
+# local Claude memory dir, so ignoring them here does not lose them.
+docs/sessions/*
+!docs/sessions/_TEMPLATE.md
+!docs/sessions/README.md
+docs/audits/*
+!docs/audits/_TEMPLATE.md
+!docs/audits/README.md
+# === docs/ framework — private working notes (END) ===
