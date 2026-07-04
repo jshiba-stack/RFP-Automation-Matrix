@@ -212,14 +212,15 @@ def build():
     stores = [s for s in f.getlist("store") if s] or None
     fy = _int(f.get("fy"), None)
     date = f.get("date", "").strip() or None
+    name = f.get("name", "").strip() or None
     if f.get("strict"):
         _run_in_thread("build", lambda: jobs.run_generate(
             template_path=base, store_paths=stores, target_fy=fy, cover_date=date,
-            log=_noop))
+            out_name=name, log=_noop))
     else:
         _run_in_thread("build", lambda: jobs.run_build(
             base_path=base, store_paths=stores, target_fy=fy, cover_date=date,
-            log=_noop))
+            out_name=name, log=_noop))
     flash("Build started.", "info")
     return redirect(url_for("index"))
 

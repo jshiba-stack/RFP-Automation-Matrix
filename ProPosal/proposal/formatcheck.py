@@ -11,7 +11,7 @@ from __future__ import annotations
 from docx import Document
 from docx.document import Document as _DocClass
 
-from . import docx_map
+from . import docx_map, proofread
 from .checks import ChecklistReport
 from .docx_edit import para_text
 
@@ -79,5 +79,18 @@ def check_format(doc_or_path, template_or_path=None) -> ChecklistReport:
             rep.warn("No foreign styles", f"styles not in template: {', '.join(foreign)}")
         else:
             rep.pass_("No foreign styles", "all paragraph styles exist in the template")
+
+    # table consistency (the proofread pass normalizes these on build; here we
+    # just report the current state, so a standalone check still surfaces them)
+    font_bad = proofread.font_outliers(doc)
+    if font_bad:
+        rep.warn("Table font size uniform", f"mixed sizes in: {', '.join(font_bad)}")
+    else:
+        rep.pass_("Table font size uniform", "each table's rows share one font size")
+    border_bad = proofread.border_outliers(doc)
+    if border_bad:
+        rep.warn("Table borders consistent", f"missing interior border in: {', '.join(border_bad)}")
+    else:
+        rep.pass_("Table borders consistent", "sibling tables share interior borders")
 
     return rep

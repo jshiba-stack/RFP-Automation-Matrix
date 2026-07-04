@@ -4,6 +4,30 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] — 2026-07-04
+
+Two proofreading gaps closed: you can name the deliverable, and the build now
+normalizes table formatting instead of carrying the last draft's drift forward.
+
+### Added
+- **Output file name control.** The step-3 build form has an optional *Output
+  file name* box. Whatever you type names the `.docx`, the `… (SUBMITTAL).pdf`,
+  and the flag/checks reports; blank still falls back to the default
+  `Professional Services Submittal FY…_DRAFT_<date>` stem. Names are sanitized
+  (extension + filesystem-illegal characters stripped). A firm-standard default
+  name is still to be decided.
+- **Table proofread pass** (`proposal/proofread.py`), run on every build/generate
+  before save. For all body tables (Sections II/III/IV) it enforces the table's
+  own internal consistency — no house style is imposed:
+  - **Font size:** each table's data rows are brought to that table's dominant
+    (mode) size, fixing the odd row that renders a point smaller.
+  - **Interior borders:** within a family of sibling tables (the Past-Performance
+    "Client" blocks), a table missing the interior row border its siblings carry
+    gains it (cloned from the majority sibling).
+  Every change is recorded under **Applied changes** (the changelog) and raises a
+  **REVIEW flag** so the human double-checks the auto-fix. The format check now
+  also reports "Table font size uniform" / "Table borders consistent".
+
 ## [0.12.0] — 2026-07-02
 
 The submittal is assembled the way the real ones are: at the PDF level.

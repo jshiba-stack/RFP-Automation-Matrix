@@ -360,6 +360,10 @@
               <option value="{{ d.path }}">{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
             {% endfor %}
           </select>
+          <label>Output file name (optional)</label>
+          <input type="text" name="name" placeholder="blank = Professional Services Submittal FY…_DRAFT_&lt;date&gt;">
+          <div class="hint">Names the <code class="mono">.docx</code>, the <code class="mono">… (SUBMITTAL).pdf</code>,
+            and the flag/checks reports. Leave blank for the default; a firm-standard default name is still TBD.</div>
           <details class="adv">
             <summary>Advanced — fiscal year/date overrides, stores, strict rebuild</summary>
             <div class="adv-body">

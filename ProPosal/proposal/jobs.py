@@ -3,13 +3,35 @@
 from __future__ import annotations
 
 import datetime as _dt
+import re
 import shutil
 import tempfile
 from pathlib import Path
 
 from . import (compliance, config, datastore, formatcheck, formfill, forms,
-               generator, notice, pdfutil, resumes, updater)
+               generator, notice, pdfutil, proofread, resumes, updater)
 from .flags import KIND_ADD, KIND_MISSING
+
+
+_ILLEGAL_STEM = re.compile(r'[\\/:*?"<>|]')
+
+
+def _safe_stem(name) -> str | None:
+    """Sanitize a user-supplied output name into a bare filename stem.
+
+    Strips surrounding quotes/whitespace, drops a trailing ``.docx``/``.pdf``,
+    and removes filesystem-illegal characters. Returns ``None`` when nothing
+    usable is left, so callers can fall back to the default stem.
+    """
+    if not name:
+        return None
+    stem = str(name).strip().strip('"').strip()
+    for ext in (".docx", ".pdf"):
+        if stem.lower().endswith(ext):
+            stem = stem[: -len(ext)]
+            break
+    stem = _ILLEGAL_STEM.sub("", stem).strip().rstrip(".")
+    return stem or None
 
 
 def _now_iso() -> str:
@@ -111,6 +133,7 @@ def run_build(
     target_fy: int | None = None,
     cover_date=None,
     resumes_dir=None,
+    out_name=None,
     log=print,
 ) -> dict:
     """Smart copy-and-update: produce a new draft + a flag report."""
@@ -128,11 +151,12 @@ def run_build(
         base, store, target_fy=target_fy, cover_date=cover_date,
         resumes_dir=resumes_dir, log=log
     )
+    proofread.proofread_document(doc, report, log=log)
 
     out_dir = config.output_dir_abspath(cfg)
     out_dir.mkdir(parents=True, exist_ok=True)
     eff_fy = target_fy or (store.get("opportunity", {}) or {}).get("fiscal_year")
-    stem = _output_stem(base, eff_fy)
+    stem = _safe_stem(out_name) or _output_stem(base, eff_fy)
     out_docx = out_dir / f"{stem}.docx"
     out_flags = out_dir / f"{stem}_flags.md"
 
@@ -163,6 +187,7 @@ def run_generate(
     target_fy: int | None = None,
     cover_date=None,
     resumes_dir=None,
+    out_name=None,
     log=print,
 ) -> dict:
     """Generate-from-data-store: assemble a fresh draft from a template + store."""
@@ -182,11 +207,12 @@ def run_generate(
         template, store, target_fy=target_fy, cover_date=cover_date,
         resumes_dir=resumes_dir, log=log
     )
+    proofread.proofread_document(doc, report, log=log)
 
     out_dir = config.output_dir_abspath(cfg)
     out_dir.mkdir(parents=True, exist_ok=True)
     eff_fy = target_fy or (store.get("opportunity", {}) or {}).get("fiscal_year")
-    stem = _output_stem(template, eff_fy).replace("_DRAFT_", "_GENERATED_")
+    stem = _safe_stem(out_name) or _output_stem(template, eff_fy).replace("_DRAFT_", "_GENERATED_")
     out_docx = out_dir / f"{stem}.docx"
     out_flags = out_dir / f"{stem}_flags.md"
 

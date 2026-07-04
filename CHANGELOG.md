@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## 2026-07-04
 
 ### Changed
+- **ProPosal v0.12.0 → v0.13.0** — output-file-name control and a table
+  proofread pass; see [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md):
+  - **Name the deliverable**: an optional *Output file name* box in the build
+    form names the `.docx`, the `… (SUBMITTAL).pdf`, and the reports (blank =
+    the default dated stem; input is sanitized). Firm-standard default still TBD.
+  - **Table proofread on every build** (`proposal/proofread.py`): each body
+    table's data rows are normalized to that table's dominant font size, and
+    sibling Past-Performance blocks are reconciled to a consistent interior
+    border — auto-fixed, recorded under Applied changes, and REVIEW-flagged for
+    human verification. The format check now also reports table font/border
+    consistency.
 - **ProPosal v0.7.0 → v0.12.0** — five releases in one extended session; see
   [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md) for detail:
   - **Submittal assembled at the PDF level** (the way the real ones are built):
