@@ -4,6 +4,32 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-07-02
+
+Robustness fixes from the 2026-07-02 suite deep review
+(`docs/audits/2026-07-02-01-suite-deep-review.md` at the repo root).
+
+### Fixed
+- **Scan results are never lost to an open workbook.** If the spreadsheet is
+  open in Excel (Windows locks it), the merge now saves to a timestamped
+  sibling file and says so in the dashboard banner/log, instead of failing the
+  whole scan with `PermissionError`.
+- **Duplicate Solicitation # rows no longer double-write.** A hand-added
+  duplicate row is collapsed to the first occurrence on the next merge (its
+  manual columns win), instead of being written twice.
+- **Schedule registration failures are surfaced.** `schtasks /Create` errors
+  now raise with the schtasks message: the Save button shows "Settings saved,
+  but the schedule was NOT registered: …" instead of silently pretending, and
+  a failure at dashboard startup lands in `last_error`.
+- **Config/state writes are atomic** (temp file + `os.replace`), so the
+  dashboard process and a Task Scheduler-spawned scan/email process can no
+  longer see each other's half-written `config.json` / `.scan_state.json`.
+- `__version__` had been left at 0.1.0 since the 0.2.0 release; corrected.
+
+### Notes
+- The test suite written during development was intentionally deleted after
+  passing (space saving); there are currently no tests in the repo.
+
 ## [0.2.0] — 2026-06-27
 
 Scheduling moves to Windows Task Scheduler so scans/emails run with the dashboard

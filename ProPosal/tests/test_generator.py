@@ -31,6 +31,15 @@ def test_extract_pulls_all_sections(store):
     assert "ongoing" in ends and 2024 in ends
 
 
+def test_extract_past_performance_full_blocks(store):
+    ids = [r["id"] for r in store["past_performance"]]
+    assert len(ids) == len(set(ids))                     # unique even for same client
+    rec = store["past_performance"][0]
+    for field in ("client", "project", "scope", "issue_resolution"):
+        assert rec.get(field), f"missing {field}"
+    assert "\n" not in rec["client"]                     # client reads on one line
+
+
 def test_generate_rebuilds_capacity_from_store(store):
     doc, report = generator.generate(BASE, store, target_fy=2027, cover_date="2026-03-02")
     cap = docx_map.find_capacity_table(doc)

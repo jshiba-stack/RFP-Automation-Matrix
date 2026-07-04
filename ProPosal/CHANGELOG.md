@@ -4,6 +4,220 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] — 2026-07-02
+
+The submittal is assembled the way the real ones are: at the PDF level.
+Verified page-for-page against the FY2026 DRAFT PDF (21/21 pages, all ten
+resume pages identical people in identical order).
+
+### Changed
+- **Resumes are merged as PDF pages, not docx content.** Inspecting the
+  references showed the truth: every draft/FINAL `.docx` ends at the
+  "Appendix: Resumes of Key Personnel" heading, and the deliverable PDF's
+  resume pages are each person's own **PDF export** (their `CONFIDENTIAL …
+  1P` footers). The docxcompose append (which restyled resumes with the
+  proposal's own style definitions — the "formatting looks off" bug) is gone.
+  Build now: exports the body PDF via Word (`docx2pdf`, COM-initialized for
+  worker threads), converts any `.docx` resume picks to PDF, and merges
+  `body + resume pages` in Section II order into
+  `<draft> (SUBMITTAL).pdf` — downloadable from step 5.
+- **Resume picking prefers the newest one-page .pdf** (that *is* the page
+  that ships), then a one-page `.docx` (converted at build time), then any
+  newest one-pager, then newest overall.
+- **Cards 3a/3b merged into one "3 · Build the draft & submittal PDF"** —
+  one starting-document picker (previous version or template), with a
+  *strict rebuild* checkbox under Advanced replacing generate mode (Sections
+  II/IV rebuilt purely from the store vs. synced in place). The CLI keeps
+  `build` and `generate`.
+- The compliance PDF size / page-limit checks now measure the **assembled
+  submittal** (the actual attachment), not a body-only export.
+- Requirements: `docx2pdf` is now required (Windows + Word); `docxcompose`
+  dropped.
+
+## [0.11.0] — 2026-07-02
+
+Section III sync lands in Generate too; resumes append one-per-page with a
+.docx preference; the review surfaces stop drowning in per-file noise.
+
+### Added
+- **Generate (3b) now syncs Past Performance from the store** (same engine as
+  3a): existing blocks keep their formatting and get changed fields updated;
+  new engagements get a cloned block. "Kept from template" no longer applies
+  to Section III.
+- **Flags to review: per-category subtabs with a review checklist.** Flags
+  group into collapsible sections by kind (first one open), each row has a
+  "reviewed" checkbox — ticked rows dim/strike and the group header counts
+  "n of m reviewed"; checkmarks persist (localStorage) until a new build.
+
+### Changed
+- **Resume picking prefers a one-page `.docx`** over a newer one-page PDF —
+  only `.docx` can be merged into the proposal. Real-folder result went from
+  4 appendable picks to 9 of 10.
+- **Resumes append one per page**: a page break precedes each appended resume
+  (matching how the FINAL lays them out) instead of running on.
+- **Cross-reference panel decluttered**: matched people live in a collapsed
+  "n matched — expand to review" section; orphan files collapse to **one line
+  per person-folder** with a file count; the alternates wall is gone (a count
+  remains inside the matched section). Build/generate flag reports likewise
+  emit one orphan flag per folder, not per file (27 flags → 3 on real data).
+
+### Fixed
+- **Project-less Past Performance store records** (old extractor format) no
+  longer append a duplicate block when their client already has several
+  engagements — they match the first existing block instead. (Named-project
+  records still append when that engagement is genuinely new.)
+
+## [0.10.0] — 2026-07-02
+
+Build (3a) now carries your content into the document, and the document's own
+content can be imported into the editors — a full round-trip.
+
+### Added
+- **Store sync in Draft from Version (3a).** Step-2 content is applied to the
+  base document instead of just flagged: new **Section IV** rows and
+  **Section II** resource rows are appended by cloning an existing row's
+  formatting; new **Section III** engagements get a whole cloned block (6-row
+  table + the lettered client paragraph, whose list numbering continues
+  automatically); matched entries get changed fields **updated in place**
+  (by row label for Section III, so layout variations are tolerated). Every
+  change is reported; nothing in the document is ever deleted. Backed by
+  `updater.apply_store_sync` + `docx_edit.append_cloned_row`.
+- **Import from a previous submittal (new step-2 card).** Pick any discovered
+  `.docx` and its Sections II / III / IV are extracted into
+  `store_imported.yaml` in your source, appearing immediately in the step-2
+  editors — edit, reorder, delete there, then Build re-applies them.
+  Re-importing overwrites the imported file (confirm prompt; dashboard edits
+  to it included). The extractor now pulls **full Past Performance blocks**
+  (project / contact / phone / scope / issue resolution, matched by row
+  label), with unique ids even when one client has several engagements.
+
+### Fixed
+- **Per-person resume subfolders are now understood.** The scanner previously
+  looked only at files directly inside the resumes folder and matched only by
+  file name — a layout like `Jordan Avery\Resume 2024.docx` matched nobody, so
+  every person showed "no resume file found". Scanning is now recursive
+  (skipping `~$`/hidden entries) and a containing **folder name identifies the
+  person** too; the cross-ref panel shows folder-relative paths. Matching is
+  also tiered — a **full-name** match always beats a last-name-only match — so
+  people sharing a surname can't steal each other's folders.
+  Verified against the real folder: every person matched, each to their own
+  one-page profile file.
+
+### Changed
+- **No more "detected + 1" fiscal-year default.** The document keeps its own
+  fiscal year unless the store's `opportunity.fiscal_year` or an explicit
+  override says otherwise (building from a current-year draft no longer
+  silently bumps to next year). When target equals the detected year, nothing
+  is rewritten.
+
+### Verification
+- 65/65 tests (5 new sync tests, extractor test); the user's exact failed
+  scenario (test entries + FY2027 draft) reproduced live: entries land in the
+  document, FY stays 2027, zero flags.
+
+## [0.9.0] — 2026-07-02
+
+Content-first dashboard: Section II manager + resume cross-reference, full
+entry management (edit / delete / reorder), and a logical 1→5 reorganization.
+
+### Added
+- **Personnel & Resumes card (2a) — Section II manager.** A form mirroring the
+  Professional Qualifications table (Resource / Qualifications) plus a numbered
+  list of current resources in **append order** with ↑↓ / edit / delete. The
+  resumes folder now lives here too ("Save & check"): the card cross-references
+  personnel against the folder inline — matched files in append order, people
+  with no resume, and orphan resumes that match nobody — with the caveats
+  spelled out (only `.docx` can be merged; name matching is fuzzy).
+- **View / edit / delete / reorder for all entry types.** Each content card
+  (II, III, IV) lists its current store entries. ✎ loads the entry back into
+  the form ("Update … — <id>", cancel restores), × deletes (with confirm),
+  ↑↓ reorders — all comment-preserving via new `storewrite.update_record`,
+  `delete_record`, `move_record` (YAML text-splice + JSON; validated before
+  write; emptied lists become `key: []`, never a null key). 6 new tests.
+- Capacity form cells are now wrapping textareas, so long client/project
+  titles fit and grow vertically.
+- **Multi-file resume folders are handled.** When several files match one
+  person (long + one-page versions, old drafts), ProPosal picks the **newest
+  one-page** file — page count read via pypdf (.pdf) or Word's
+  `docProps/app.xml` (.docx) — falling back to the newest overall when no
+  one-pager exists (that uncertain pick is flagged REVIEW in builds). The
+  losing copies are reported as "alternates", not "new hire?" orphans, and the
+  cross-reference panel shows which copy won and why. Heuristic is
+  intentionally simple and easy to swap later.
+
+### Changed
+- **Dashboard reorganized around the workflow:** 1 materials source →
+  2 submittal content (2a Personnel & Resumes, 2b Past Performance,
+  2c Capacity) → 3 build (3a Draft from Version, 3b Generate) → 4 checks &
+  forms (4a validate vs notice, 4b fill a form) → 5 latest result.
+- Entry buttons renamed to **"Commit new Section II/III/IV …"** and unified to
+  one color (primary).
+- The resumes folder is configured once in card 2a; 3a/3b use it automatically
+  (their per-form resumes field is gone).
+
+### Fixed
+- Textarea placeholder text (Scope / Issue Resolution) now matches the input
+  placeholder color — the CSS only styled `input::placeholder`.
+
+## [0.8.0] — 2026-07-02
+
+Project-entry capture for Sections III & IV, plus review fixes.
+
+### Added
+- **"Add a project entry" dashboard card (2e).** Two forms styled to mirror the
+  submittal's own tables — a Section III **Past Performance** block (Client /
+  Project / Client Contact / Client Phone / Detailed Scope of Work / Issue
+  Resolution) and a Section IV **Capacity / Project Listing** row (Client /
+  Project / Start Date / End Date) — with grayed example text in every box.
+  Entries append to a chosen data store (or a new `store_additions.yaml` in the
+  active source); Generate (2b) then rebuilds Section IV from `projects`, and
+  Build (2a) flags new Section III clients to add manually.
+- **Comment-preserving store writer (`storewrite.py`).** Appends a record to a
+  top-level list (`projects` / `past_performance`) by splicing text into the
+  YAML block — comments, ordering, and spacing survive. Generates unique ids,
+  re-parses before writing (atomic replace; never writes a broken store), and
+  handles missing files/keys, inline `[]`, and JSON stores. Tested.
+- `past_performance` records may now carry `project`, `contact`, `phone`,
+  `scope`, and `issue_resolution` alongside `client` (captured for the future
+  store-driven Past Performance rebuild).
+
+### Changed
+- **Dashboard decluttered around the automation.** Fiscal year, cover date,
+  data-store choice, and resumes folder are override fields — everything runs
+  automatically without them (detected year + 1, today's date, the discovered
+  store). They now live in a collapsed **Advanced** panel on 2a/2b/2c, the
+  first discovered store is pre-selected everywhere, and card 2e's
+  "save into" is automatic when there's only one sensible target (single
+  store, or a new `store_additions.yaml` when none exists).
+- **Dashboard default port is now 5001** (ProSE owns 5000), so both dashboards
+  can run at the same time.
+
+### Fixed
+- **Compliance check #2 no longer false-FAILs valid stores.** The offline
+  "allowed set" is now only the explicit `opportunity.allowed_categories`; the
+  store's *descriptive* `categories` list (often partial) is no longer treated
+  as authoritative — without an explicit set the check WARNs and points at
+  notice validation (2c). A separate soft WARN lists selected categories that
+  have no Section-I description.
+- **Notice validation now FAILs a passed deadline** ("is this last year's
+  notice?") instead of always warning.
+- Client/project matching (`updater._flag_new_entities`) now normalizes commas
+  and newlines, so a store client written `City & County of Honolulu,
+  Department of ...` matches the doc's two-line block header instead of raising
+  a false ADD-MANUALLY flag.
+- Heading checks (compliance + format) no longer accept prose that merely
+  mentions a heading's text: a heading counts if a Heading/Title-styled
+  paragraph contains it or a paragraph starts with it — and the format check
+  prefers the styled paragraph, so body text can't trigger a false
+  `style='Normal'` FAIL.
+- The form-fill flag report is downloadable even when no PDF was produced
+  (flat template) — previously the link was dropped exactly when the report
+  mattered most.
+- A run-fragmented match starting at an *empty* run no longer risks a spurious
+  UNSAFE-EDIT flag (empty runs render nothing; their formatting is ignored in
+  the uniformity check).
+- Config/state writes are atomic (temp file + `os.replace`).
+
 ## [0.7.0] — 2026-06-30
 
 Phase 6 (part 1): PDF form-fill framework, mirroring the 2a/2b modes.

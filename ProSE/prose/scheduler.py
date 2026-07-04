@@ -32,7 +32,10 @@ class ProseScheduler:
     def start(self):
         if self._use_win:
             self._started = True
-            self.reschedule()  # ensure the Task Scheduler tasks exist/match config
+            try:
+                self.reschedule()  # ensure the Task Scheduler tasks exist/match config
+            except Exception as exc:  # noqa: BLE001 - don't block dashboard startup
+                config.update_state(last_error=f"Schedule registration failed: {exc}")
             return
         self._ensure_apscheduler()
         if not self._started:

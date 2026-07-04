@@ -145,10 +145,19 @@ def footer_paragraphs(doc: _Doc):
             yield p, si
 
 
+def _looks_like_heading_para(p: Paragraph, heading: str) -> bool:
+    """True if ``p`` plausibly IS the heading (not prose that mentions it):
+    either it uses a Heading/Title style, or its text starts with the heading."""
+    t = para_text(p).strip()
+    if not _is_heading(t, heading):
+        return False
+    style = (p.style.name if p.style else "").lower()
+    return "heading" in style or "title" in style or t.lower().startswith(heading.lower())
+
+
 def missing_headings(doc: _Doc) -> list[str]:
-    present = [para_text(p) for p in doc.paragraphs]
     missing = []
     for h in REQUIRED_HEADINGS:
-        if not any(_is_heading(t, h) for t in present):
+        if not any(_looks_like_heading_para(p, h) for p in doc.paragraphs):
             missing.append(h)
     return missing

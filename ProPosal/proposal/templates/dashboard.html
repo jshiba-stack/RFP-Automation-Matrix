@@ -1,16 +1,49 @@
 {%- macro store_select(stores) -%}
   <select name="store" {{ 'multiple size=3' if stores|length > 1 else '' }}>
     {% if not stores %}<option value="">— no data store in the folder —</option>{% endif %}
-    {% for s in stores %}<option value="{{ s.path }}">{{ s.name }}</option>{% endfor %}
+    {% for s in stores %}<option value="{{ s.path }}" {{ 'selected' if loop.first else '' }}>{{ s.name }}</option>{% endfor %}
   </select>
   {% if stores|length > 1 %}<div class="hint">Ctrl-click to combine several (e.g. firm + per-year).</div>{% endif %}
 {%- endmacro -%}
-{%- macro resumes_field(id, resumes_dir) -%}
-  <label>Resumes folder (optional — cross-checks personnel &amp; appends resumes)</label>
-  <div class="row">
-    <div style="flex:3;"><input type="text" name="resumes_dir" id="{{ id }}" value="{{ resumes_dir or '' }}" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Resumes"></div>
-    <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('{{ id }}')">📁</button></div>
+{%- macro store_sink(stores, workspace) -%}
+  {# Where a committed entry is saved. Automatic unless there's a real choice. #}
+  <div class="sink-wrap">
+  {% if stores|length > 1 %}
+    <label>Save into data store</label>
+    <select name="store" required>
+      {% for s in stores %}<option value="{{ s.path }}" {{ 'selected' if loop.first else '' }}>{{ s.name }}</option>{% endfor %}
+      {% if workspace %}<option value="__new__">＋ new file: store_additions.yaml (in this source)</option>{% endif %}
+    </select>
+  {% elif stores %}
+    <input type="hidden" name="store" value="{{ stores[0].path }}">
+    <div class="hint">Saves into <code class="mono">{{ stores[0].name }}</code> automatically.</div>
+  {% elif workspace %}
+    <input type="hidden" name="store" value="__new__">
+    <div class="hint">Saves into a new <code class="mono">store_additions.yaml</code> in this source automatically.</div>
+  {% else %}
+    <div class="hint" style="color:var(--amber);">Add a materials source (step 1) first — entries are saved into a data store there.</div>
+  {% endif %}
   </div>
+{%- endmacro -%}
+{%- macro entry_rowbtns(kind, rec) -%}
+  <span class="rowbtns">
+    <button type="button" class="ib" title="Edit this entry" onclick='editEntry("{{ kind }}", {{ rec|tojson }})'>✎</button>
+    <form method="post" action="{{ url_for('entry_move') }}">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="id" value="{{ rec.id }}">
+      <input type="hidden" name="store" value="{{ rec._store }}">
+      <button class="ib" name="dir" value="up" title="Move up">↑</button><button class="ib" name="dir" value="down" title="Move down">↓</button>
+    </form>
+    <form method="post" action="{{ url_for('entry_delete') }}" onsubmit="return confirm('Delete this entry from {{ rec._store_name }}? (the store file is edited; the entry is gone)')">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="id" value="{{ rec.id }}">
+      <input type="hidden" name="store" value="{{ rec._store }}">
+      <button class="ib danger" title="Delete">×</button>
+    </form>
+  </span>
+{%- endmacro -%}
+{%- macro store_badge(rec, stores) -%}
+  {% if stores|length > 1 %}<span class="pill kind" title="{{ rec._store }}">{{ rec._store_name }}</span>{% endif %}
 {%- endmacro -%}
 <!doctype html>
 <html lang="en">
@@ -42,7 +75,7 @@
       {% if action.running %}<span class="spinner"></span>{% endif %}{{ action.message or '' }}
     </div>
 
-    <!-- STEP 1: MATERIALS SOURCE -->
+    <!-- ============ STEP 1: MATERIALS SOURCE ============ -->
     <div class="card full" style="margin-bottom:20px;">
       <h2><span class="step">1</span>Materials source</h2>
       <p class="lead">
@@ -83,7 +116,7 @@
           <label>Quick picks detected on this PC</label>
           <div class="chips">
             {% for sug in suggestions %}
-              <button type="button" class="chip" onclick="fillSource('{{ sug.path|replace('\\','\\\\') }}', '{{ sug.name }}')">{{ sug.kind }} · {{ sug.name }}</button>
+              <button type="button" class="chip" onclick='fillSource({{ sug.path|tojson }}, {{ sug.name|tojson }})'>{{ sug.kind }} · {{ sug.name }}</button>
             {% endfor %}
           </div>
         {% endif %}
@@ -105,59 +138,255 @@
     </div>
 
     <div class="grid">
-      <!-- DRAFT FROM VERSION (smart copy-and-update) -->
+      <!-- ============ STEP 2: SUBMITTAL CONTENT (data store) ============ -->
+
+      <!-- 2 (intro): IMPORT FROM A PREVIOUS SUBMITTAL -->
+      <div class="card full">
+        <h2><span class="step">2</span>Import content from a previous submittal (optional)</h2>
+        <p class="lead">Pull the editable sections — <strong>II Personnel</strong>,
+          <strong>III Past Performance</strong>, <strong>IV Project Listing</strong> — out of an existing
+          document into the editors below (saved as <code class="mono">store_imported.yaml</code> in your
+          source). Edit them there, then <strong>Build (3)</strong> re-applies everything to the document.</p>
+        <form method="post" action="{{ url_for('import_doc') }}"
+              onsubmit="return confirm('Import will OVERWRITE store_imported.yaml, including any edits you made to previously imported entries. Continue?')">
+          <div class="row">
+            <div style="flex:3;">
+              <label>Document to import from</label>
+              <select name="docx" required>
+                {% if not docx %}<option value="">— no .docx found in the folder —</option>{% endif %}
+                {% for d in docx %}
+                  <option value="{{ d.path }}">{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div style="flex:0 0 auto; align-self:flex-end;">
+              <button class="btn btn-accent" type="submit" {{ 'disabled' if not docx else '' }}>⇩ Import into editors</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- 2a: PERSONNEL & RESUMES (Section II) -->
+      <div class="card full">
+        <h2><span class="step">2a</span>Personnel &amp; Resumes (II. Professional Qualifications)</h2>
+        <p class="lead">Maintain the Section II resource table and the resumes appendix together.
+          <strong>Order matters:</strong> resumes are appended at the end of the proposal in exactly this
+          order when you <strong>Build (3)</strong> assembles the submittal PDF — use ↑↓ to arrange.
+          Build also appends new resources to the document's table and updates changed qualifications
+          in place.</p>
+
+        <div class="grid">
+          <div>
+            <form method="post" action="{{ url_for('add_entry') }}" id="form-personnel">
+              <input type="hidden" name="kind" value="personnel">
+              <input type="hidden" name="edit_id" value="">
+              <input type="hidden" name="edit_store" value="">
+              <h3 class="subh">Add / edit a resource</h3>
+              <table class="ptable cap">
+                <tr><th style="width:34%;">Resource</th><th>Qualifications</th></tr>
+                <tr>
+                  <td><input type="text" name="name" required placeholder="Jamie Rivera"></td>
+                  <td><textarea name="qualifications" rows="2" placeholder="PMP-certified senior project manager; 20+ years of IT delivery."></textarea></td>
+                </tr>
+              </table>
+              {{ store_sink(stores, workspace) }}
+              <div class="actions">
+                <button class="btn btn-primary commit-btn" type="submit" data-label="Commit new Section II entry">Commit new Section II entry</button>
+                <button class="btn btn-ghost cancel-edit" type="button" style="display:none;" onclick="cancelEdit('personnel')">Cancel edit</button>
+              </div>
+            </form>
+
+            <h3 class="subh" style="margin-top:16px;">Current resources ({{ entries.personnel|length }}) — append order</h3>
+            {% if entries.personnel %}
+              <table class="report">
+                {% for rec in entries.personnel %}
+                  <tr>
+                    <td style="width:26px;"><strong>{{ loop.index }}</strong></td>
+                    <td><strong>{{ rec.name }}</strong> {{ store_badge(rec, stores) }}<br>
+                      <span class="detail">{{ (rec.qualifications or rec.role or '')|truncate(90) }}</span></td>
+                    <td style="width:110px;">{% if rec.id %}{{ entry_rowbtns('personnel', rec) }}{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              </table>
+            {% else %}<p class="empty">No personnel in the data store yet.</p>{% endif %}
+          </div>
+
+          <div>
+            <h3 class="subh">Resumes folder</h3>
+            <form method="post" action="{{ url_for('resumes_dir') }}">
+              <div class="row">
+                <div style="flex:3;"><input type="text" name="resumes_dir" id="resumesDir" value="{{ resumes_dir or '' }}" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Resumes"></div>
+                <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('resumesDir')">📁</button></div>
+                <div style="flex:0 0 auto;"><button class="btn btn-accent" type="submit">Save &amp; check</button></div>
+              </div>
+            </form>
+            {% if resume_check %}
+              <h3 class="subh" style="margin-top:14px;">Cross-reference (matched by name)</h3>
+              {% for name in resume_check.missing %}
+                <div class="chk"><span class="mark WARN">!</span>
+                  <span><span class="name">{{ name }}</span> <span class="detail">— no resume file found (left the firm, or file missing?)</span></span></div>
+              {% endfor %}
+              {% for label, count in resume_check.orphan_groups %}
+                <div class="chk"><span class="mark WARN">?</span>
+                  <span><span class="name">{{ label }}</span> <span class="detail">— {{ count }} file(s) matching nobody in Section II (new hire to add?)</span></span></div>
+              {% endfor %}
+              <details class="adv" style="margin-top:10px;">
+                <summary>✓ {{ resume_check.matched|length }} matched — expand to review each pick</summary>
+                <div class="adv-body">
+                  {% for name, fname, note in resume_check.matched %}
+                    <div class="chk"><span class="mark PASS">✓</span>
+                      <span><span class="name">{{ loop.index }}. {{ name }}</span> <span class="detail">→ {{ fname }}{% if note %} · {{ note }}{% endif %}</span></span></div>
+                  {% endfor %}
+                  {% if resume_check.alternates_count %}
+                    <div class="hint" style="margin-top:6px;">{{ resume_check.alternates_count }} older/alternate
+                      cop{{ 'y' if resume_check.alternates_count == 1 else 'ies' }} in the folder were considered and not used.</div>
+                  {% endif %}
+                </div>
+              </details>
+              <div class="hint" style="margin-top:8px;">When several files match a person, ProPosal picks the
+                <strong>newest one-page .pdf</strong> (the submittal PDF is assembled from these pages),
+                then a one-page <code class="mono">.docx</code> (converted via Word at build time), falling
+                back to newest overall — flagged in builds. Matching uses the file <em>or its folder</em>
+                name (full name beats last-name-only).</div>
+            {% elif resumes_dir %}
+              <div class="hint" style="color:var(--amber);">Folder not found: <code class="mono">{{ resumes_dir }}</code></div>
+            {% else %}
+              <p class="empty">Attach the folder with everyone's resume files to cross-check them against Section II.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- 2b: PAST PERFORMANCE (Section III) -->
       <div class="card">
-        <h2><span class="step">2a</span>Draft from Version</h2>
-        <p class="lead">Open last year's FINAL and refresh the variable fields (fiscal year, dates,
-          ongoing project end-dates), flagging everything else for your review.</p>
+        <h2><span class="step">2b</span>Past Performance (III)</h2>
+        <p class="lead">One block per engagement, exactly like the submittal's table.
+          <strong>Build (3)</strong> appends new blocks to Section III (cloning an existing block's
+          formatting) and updates changed fields in matched blocks. The gray text is example only.</p>
+        <form method="post" action="{{ url_for('add_entry') }}" id="form-pp">
+          <input type="hidden" name="kind" value="pp">
+          <input type="hidden" name="edit_id" value="">
+          <input type="hidden" name="edit_store" value="">
+          <table class="ptable">
+            <tr><th>Client</th>
+              <td><input type="text" name="client" required placeholder="City &amp; County of Honolulu, Department of Information Technology"></td></tr>
+            <tr><th>Project</th>
+              <td><input type="text" name="project" required placeholder="Database Administration"></td></tr>
+            <tr><th>Client Contact</th>
+              <td><input type="text" name="contact" placeholder="Chris Nakamura"></td></tr>
+            <tr><th>Client Phone</th>
+              <td><input type="text" name="phone" placeholder="(808) 555-0123"></td></tr>
+            <tr><th>Detailed Scope of Work</th>
+              <td><textarea name="scope" placeholder="Database Administration services including consulting, architecture and administration services for Oracle, MS SQL Server, SharePoint, MySQL, MongoDB and PostgreSQL"></textarea></td></tr>
+            <tr><th>Issue Resolution</th>
+              <td><textarea name="issue_resolution" placeholder="No major issues.  Issues resolved by following PMP practices and using senior-level professional staff."></textarea></td></tr>
+          </table>
+          {{ store_sink(stores, workspace) }}
+          <div class="actions">
+            <button class="btn btn-primary commit-btn" type="submit" data-label="Commit new Section III entry">Commit new Section III entry</button>
+            <button class="btn btn-ghost cancel-edit" type="button" style="display:none;" onclick="cancelEdit('pp')">Cancel edit</button>
+          </div>
+        </form>
+
+        <h3 class="subh" style="margin-top:16px;">Current entries ({{ entries.pp|length }})</h3>
+        {% if entries.pp %}
+          <table class="report">
+            {% for rec in entries.pp %}
+              <tr>
+                <td><strong>{{ rec.client|truncate(60) }}</strong> {{ store_badge(rec, stores) }}<br>
+                  <span class="detail">{{ rec.project or '' }}</span></td>
+                <td style="width:110px;">{% if rec.id %}{{ entry_rowbtns('pp', rec) }}{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}<p class="empty">No Past Performance entries in the data store yet.</p>{% endif %}
+      </div>
+
+      <!-- 2c: CAPACITY / PROJECT LISTING (Section IV) -->
+      <div class="card">
+        <h2><span class="step">2c</span>Capacity: Project Listing (IV)</h2>
+        <p class="lead"><strong>Build (3)</strong> appends new rows to the Section IV table and updates
+          changed dates (its <em>strict rebuild</em> option rebuilds the whole table in this order).
+          End Date <code class="mono">ongoing</code> renders as “<em>&lt;year&gt;</em>+” and refreshes
+          every cycle; a year means completed.</p>
+        <form method="post" action="{{ url_for('add_entry') }}" id="form-capacity">
+          <input type="hidden" name="kind" value="capacity">
+          <input type="hidden" name="edit_id" value="">
+          <input type="hidden" name="edit_store" value="">
+          <table class="ptable cap">
+            <tr><th>Client</th><th>Project</th><th style="width:86px;">Start Date</th><th style="width:100px;">End Date</th></tr>
+            <tr>
+              <td><textarea name="client" rows="2" required placeholder="City &amp; County of Honolulu, DIT"></textarea></td>
+              <td><textarea name="project" rows="2" required placeholder="Database Administration"></textarea></td>
+              <td><input type="text" name="start_year" placeholder="2015" inputmode="numeric"></td>
+              <td><input type="text" name="end" placeholder="ongoing"></td>
+            </tr>
+          </table>
+          {{ store_sink(stores, workspace) }}
+          <div class="actions">
+            <button class="btn btn-primary commit-btn" type="submit" data-label="Commit new Section IV row">Commit new Section IV row</button>
+            <button class="btn btn-ghost cancel-edit" type="button" style="display:none;" onclick="cancelEdit('capacity')">Cancel edit</button>
+          </div>
+        </form>
+
+        <h3 class="subh" style="margin-top:16px;">Current rows ({{ entries.capacity|length }}) — table order</h3>
+        {% if entries.capacity %}
+          <table class="report">
+            {% for rec in entries.capacity %}
+              <tr>
+                <td><strong>{{ rec.client|truncate(46) }}</strong> {{ store_badge(rec, stores) }}<br>
+                  <span class="detail">{{ rec.project or '' }} · {{ rec.start_year or '?' }}–{{ rec.end if rec.end not in (none, 'ongoing') else 'ongoing' }}</span></td>
+                <td style="width:110px;">{% if rec.id %}{{ entry_rowbtns('capacity', rec) }}{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}<p class="empty">No Capacity rows in the data store yet.</p>{% endif %}
+      </div>
+
+      <!-- ============ STEP 3: BUILD THE DRAFT + SUBMITTAL PDF ============ -->
+      <div class="card full">
+        <h2><span class="step">3</span>Build the draft &amp; submittal PDF</h2>
+        <p class="lead">Pick a starting document — last year's FINAL, this year's working draft, or a
+          template. ProPosal refreshes the dates (the fiscal year stays unless the store or an override
+          says otherwise), syncs your step-2 content into Sections II/III/IV (new entries appended with
+          the document's own formatting, changed ones updated), then <strong>assembles the deliverable
+          PDF</strong>: the exported body plus each person's one-page resume PDF, in Section II order —
+          exactly how the real submittals are put together. Resumes never live in the .docx itself.</p>
         <form method="post" action="{{ url_for('build') }}">
-          <label>Version to update from</label>
+          <label>Start from (previous version or template)</label>
           <select name="base" required>
             {% if not docx %}<option value="">— no .docx found in the folder —</option>{% endif %}
             {% for d in docx %}
               <option value="{{ d.path }}">{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
             {% endfor %}
           </select>
-          <label>Data store (optional — for target year &amp; flags)</label>
-          {{ store_select(stores) }}
-          <div class="row">
-            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="detected + 1" min="2000" max="2100"></div>
-            <div><label>Cover date</label><input type="date" name="date"></div>
-          </div>
-          <div class="hint">Leave year/date blank to use the data store, or detected year + 1 and today.</div>
-          {{ resumes_field('buildResumes', resumes_dir) }}
-          <div class="actions"><button class="btn btn-primary" type="submit">Build draft</button></div>
+          <details class="adv">
+            <summary>Advanced — fiscal year/date overrides, stores, strict rebuild</summary>
+            <div class="adv-body">
+              <label>Data store (your step-2 content; may also carry the target year)</label>
+              {{ store_select(stores) }}
+              <div class="row">
+                <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="same as document" min="2000" max="2100"></div>
+                <div><label>Cover date</label><input type="date" name="date"></div>
+              </div>
+              <label class="inline" style="margin-top:12px; font-weight:600;">
+                <input type="checkbox" name="strict" value="1">
+                Strict rebuild — Sections II &amp; IV tables are rebuilt purely from the data store
+                (rows not in the store are dropped) instead of appended/updated in place.
+              </label>
+              <div class="hint">Blank year/date = the store's values (or the document's own year and today).
+                The resumes folder is managed in card 2a and used automatically.</div>
+            </div>
+          </details>
+          <div class="actions"><button class="btn btn-primary" type="submit">Build draft + submittal PDF</button></div>
         </form>
       </div>
 
-      <!-- GENERATE FROM TEMPLATE / DATA STORE -->
-      <div class="card">
-        <h2><span class="step">2b</span>Generate from Template / Data Store</h2>
-        <p class="lead">Assemble a fresh draft: the template supplies the layout and static text; the
-          data store fills the Capacity &amp; Qualifications tables and the dates.</p>
-        <form method="post" action="{{ url_for('generate') }}">
-          <label>Data store</label>
-          {{ store_select(stores) }}
-          <label>Template</label>
-          <select name="template">
-            {% if not docx %}<option value="">— no .docx found in the folder —</option>{% endif %}
-            {% for d in docx %}
-              <option value="{{ d.path }}" {{ 'selected' if d.kind == 'template' else '' }}>{{ d.name }}{% if d.kind and d.kind != 'other' %}  ·  {{ d.kind }}{% endif %}</option>
-            {% endfor %}
-          </select>
-          <div class="row">
-            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="from store" min="2000" max="2100"></div>
-            <div><label>Cover date</label><input type="date" name="date"></div>
-          </div>
-          <div class="hint">A FINAL works fine as a template if you don't have a dedicated one.</div>
-          {{ resumes_field('genResumes', resumes_dir) }}
-          <div class="actions"><button class="btn btn-accent" type="submit">Generate from store</button></div>
-        </form>
-      </div>
+      <!-- ============ STEP 4: CHECK & FORMS ============ -->
 
-      <!-- VALIDATE AGAINST THE CITY NOTICE -->
+      <!-- 4a: VALIDATE AGAINST THE CITY NOTICE -->
       <div class="card full">
-        <h2><span class="step">2c</span>Validate against the City notice (requirements)</h2>
+        <h2><span class="step">4a</span>Validate against the City notice (requirements)</h2>
         <p class="lead">Cross-check your data store against the City's annual notice PDF: fiscal year,
           submittal deadline, attachment size cap, required form (e.g. SF330 for some departments), and
           whether your selected categories are actually listed for your department. Flag-only.</p>
@@ -169,10 +398,15 @@
         {% endif %}
         <form method="post" action="{{ url_for('validate') }}">
           <input type="hidden" name="notice_pdf" value="{{ notice_pdf }}">
-          <div class="row">
-            <div style="flex:3;"><label>Data store</label>{{ store_select(stores) }}</div>
-            <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="from store" min="2000" max="2100"></div>
-          </div>
+          <details class="adv">
+            <summary>Advanced — pick a different store or fiscal year</summary>
+            <div class="adv-body">
+              <div class="row">
+                <div style="flex:3;"><label>Data store</label>{{ store_select(stores) }}</div>
+                <div><label>Target fiscal year</label><input type="number" name="fy" placeholder="from store" min="2000" max="2100"></div>
+              </div>
+            </div>
+          </details>
           <div class="actions"><button class="btn btn-cyan" type="submit" {{ 'disabled' if not notice_pdf else '' }}>Validate vs notice</button></div>
         </form>
 
@@ -189,9 +423,9 @@
         {% endif %}
       </div>
 
-      <!-- FILL A FORM (SF330 / DPW-120) -->
+      <!-- 4b: FILL A FORM (SF330 / DPW-120) -->
       <div class="card full">
-        <h2><span class="step">2d</span>Fill a form (SF330 / DPW-120)</h2>
+        <h2><span class="step">4b</span>Fill a form (SF330 / DPW-120)</h2>
         <p class="lead">Fill a fillable PDF form from the data store. Each form has a default blank template;
           override it with your own, and optionally upload a previously-filled copy to carry values forward
           (matched by field name) — anything that doesn't line up is flagged.</p>
@@ -214,17 +448,23 @@
         </form>
       </div>
 
-      <!-- RESULTS -->
+      <!-- ============ STEP 5: RESULTS ============ -->
       <div class="card full">
-        <h2><span class="step">3</span>Latest result{% if result %} — {{ result.kind }}{% endif %}</h2>
+        <h2><span class="step">5</span>Latest result{% if result %} — {{ result.kind }}{% endif %}</h2>
         {% if not result %}
           <p class="empty">Run a build or generate to see the flag report and checks here.</p>
         {% else %}
           <div class="dl">
-            {% if result.output_name %}<a class="btn btn-cyan" href="{{ url_for('download', name=result.output_name) }}">⬇ {{ 'Filled PDF' if result.output_name.endswith('.pdf') else 'Draft .docx' }}</a>{% endif %}
+            {% if result.submittal_name %}<a class="btn btn-primary" href="{{ url_for('download', name=result.submittal_name) }}">⬇ Submittal PDF — the deliverable you send</a>{% endif %}
+            {% if result.output_name %}<a class="btn btn-cyan" href="{{ url_for('download', name=result.output_name) }}">⬇ {{ 'Filled PDF' if result.output_name.endswith('.pdf') else 'Draft .docx — your working copy (edit flags here, next cycle starts from it)' }}</a>{% endif %}
             {% if result.flags_name %}<a class="btn btn-ghost" href="{{ url_for('download', name=result.flags_name) }}">⬇ Flag report</a>{% endif %}
             {% if result.checks_name %}<a class="btn btn-ghost" href="{{ url_for('download', name=result.checks_name) }}">⬇ Checks report</a>{% endif %}
           </div>
+          {% if result.submittal_name and result.output_name and not result.output_name.endswith('.pdf') %}
+            <div class="hint" style="margin-top:6px;">Workflow: fix any flags in the <strong>.docx</strong> (Word),
+              drop it in your source folder, and rebuild — a fresh submittal PDF is assembled from it.
+              The PDF itself is disposable; the .docx is what carries over to next year.</div>
+          {% endif %}
           {% if result.compliance or result.format %}
           <div class="grid" style="margin-top:18px;">
             <div>
@@ -245,11 +485,25 @@
           {% endif %}
           <h3 class="subh" style="margin-top:18px;">Flags to review ({{ result.flags|length }})</h3>
           {% if result.flags %}
-            <table class="report"><tr><th>Kind</th><th>Where</th><th>Detail</th><th>Value</th></tr>
-              {% for kind, loc, summary, new in result.flags %}
-                <tr><td><span class="pill warnk">{{ kind }}</span></td><td>{{ loc }}</td><td>{{ summary }}</td><td>{% if new %}<code class="mono">{{ new }}</code>{% endif %}</td></tr>
-              {% endfor %}
-            </table>
+            <div class="hint" style="margin-bottom:6px;">Tick a flag once you've handled it — your checkmarks
+              stick (per result) until a new build replaces them.</div>
+            {% for fkind, items in result.flags_grouped %}
+              <details class="adv flaggroup" data-kind="{{ fkind }}" {{ 'open' if loop.first else '' }}>
+                <summary><span class="pill warnk">{{ fkind }}</span>
+                  <span class="flagcount" data-total="{{ items|length }}">{{ items|length }} flag(s)</span></summary>
+                <div class="adv-body">
+                  <table class="report">
+                    {% for loc, summary, new in items %}
+                      <tr class="flagrow" data-flagkey="{{ (result.output_name ~ '|' ~ fkind ~ '|' ~ loop.index0) }}">
+                        <td style="width:26px;"><input type="checkbox" class="flagdone" title="Mark reviewed"></td>
+                        <td>{{ loc }}</td><td>{{ summary }}</td>
+                        <td>{% if new %}<code class="mono">{{ new }}</code>{% endif %}</td>
+                      </tr>
+                    {% endfor %}
+                  </table>
+                </div>
+              </details>
+            {% endfor %}
           {% else %}<p class="empty">No flags — clean run.</p>{% endif %}
           <h3 class="subh" style="margin-top:18px;">Applied changes ({{ result.applied|length }})</h3>
           {% if result.applied %}
@@ -296,6 +550,39 @@
       document.getElementById('addPanel').style.display = 'block';
     }
 
+    // --- edit-in-place for Section II / III / IV entries ---
+    const ENTRY_FIELDS = {
+      personnel: ['name', 'qualifications'],
+      pp: ['client', 'project', 'contact', 'phone', 'scope', 'issue_resolution'],
+      capacity: ['client', 'project', 'start_year', 'end'],
+    };
+    function editEntry(kind, rec) {
+      const form = document.getElementById('form-' + kind);
+      form.querySelector('[name=edit_id]').value = rec.id || '';
+      form.querySelector('[name=edit_store]').value = rec._store || '';
+      for (const f of ENTRY_FIELDS[kind]) {
+        const el = form.querySelector('[name=' + f + ']');
+        if (el) el.value = (rec[f] === undefined || rec[f] === null) ? '' : rec[f];
+      }
+      const btn = form.querySelector('.commit-btn');
+      btn.textContent = btn.dataset.label.replace('Commit new', 'Update') + ' — ' + (rec.id || '');
+      form.querySelector('.cancel-edit').style.display = 'inline-flex';
+      const sink = form.querySelector('.sink-wrap');
+      if (sink) sink.style.display = 'none';   // edits go back to the entry's own file
+      form.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+    function cancelEdit(kind) {
+      const form = document.getElementById('form-' + kind);
+      form.reset();
+      form.querySelector('[name=edit_id]').value = '';
+      form.querySelector('[name=edit_store]').value = '';
+      const btn = form.querySelector('.commit-btn');
+      btn.textContent = btn.dataset.label;
+      form.querySelector('.cancel-edit').style.display = 'none';
+      const sink = form.querySelector('.sink-wrap');
+      if (sink) sink.style.display = '';
+    }
+
     // --- folder browser (targets any input id) ---
     const modal = document.getElementById('modal');
     let curDir = '';
@@ -336,6 +623,27 @@
       a.onclick = () => browse(path);
       return a;
     }
+
+    // --- flag review checkboxes (persisted per result in localStorage) ---
+    function refreshFlagCounts() {
+      document.querySelectorAll('.flaggroup').forEach(g => {
+        const rows = g.querySelectorAll('.flagrow');
+        const done = g.querySelectorAll('.flagrow.done').length;
+        const c = g.querySelector('.flagcount');
+        if (c) c.textContent = done ? `${done} of ${rows.length} reviewed` : `${rows.length} flag(s)`;
+      });
+    }
+    document.querySelectorAll('.flagrow').forEach(row => {
+      const key = 'ppflag|' + row.dataset.flagkey;
+      const box = row.querySelector('.flagdone');
+      if (localStorage.getItem(key) === '1') { box.checked = true; row.classList.add('done'); }
+      box.addEventListener('change', () => {
+        row.classList.toggle('done', box.checked);
+        if (box.checked) localStorage.setItem(key, '1'); else localStorage.removeItem(key);
+        refreshFlagCounts();
+      });
+    });
+    refreshFlagCounts();
 
     // --- live status polling ---
     let wasRunning = {{ 'true' if action.running else 'false' }};

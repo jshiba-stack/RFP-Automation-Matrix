@@ -1,17 +1,21 @@
-"""PRIMARY mode: smart copy-and-update of a previous FINAL submittal.
+"""PRIMARY mode: smart copy-and-update of a previous submittal.
 
-Opens last year's FINAL .docx, auto-applies the handful of mechanical edits, and
-flags everything else. The base file is never mutated -- we save a new draft.
+Opens the base .docx, auto-applies the mechanical edits, then syncs the
+store-managed content into the document. The base file is never mutated -- we
+save a new draft.
 
 Auto-applied (each still reported):
-  * Fiscal year bump  -- 'Fiscal Year 2026' / 'for the fiscal year 2026' / footer 'FY26'
+  * Fiscal year -- from the store / an explicit override (the document's own
+    year is kept when neither says otherwise)
   * Cover + letter date -> the build date
   * Ongoing Capacity end-dates ('2025+') -> '<as-of-year>+'
+  * Store sync: NEW Section II rows / III blocks / IV rows are appended by
+    cloning the document's own formatting; CHANGED fields on matched entries
+    are updated in place. Document content absent from the store is left alone.
 
 Flagged (never silently changed):
   * A match whose runs have mixed formatting (UNSAFE EDIT)
-  * The Capacity table missing (MISSING)
-  * Store projects / past-performance with no home in the base (ADD MANUALLY)
+  * A section table that can't be found / has no block to clone (MISSING)
 """
 
 from __future__ import annotations
@@ -20,9 +24,10 @@ import datetime as _dt
 import re
 
 from docx import Document
+from docx.table import Table
 
 from . import docx_map
-from .docx_edit import para_text, replace_in_paragraph
+from .docx_edit import append_cloned_row, para_text, replace_in_paragraph, set_cell_text
 from .flags import KIND_ADD, KIND_MISSING, KIND_UNSAFE, Report
 
 
@@ -72,20 +77,22 @@ def build(
 
     detected_fy = docx_map.detect_fiscal_year(doc)
     if target_fy is None:
-        target_fy = opp.get("fiscal_year") or ((detected_fy + 1) if detected_fy else None)
+        # No bump by default: the document keeps its own year unless the store
+        # (or an explicit override) says otherwise.
+        target_fy = opp.get("fiscal_year") or detected_fy
     if target_fy is None:
-        report.flag("document", "Could not detect a fiscal year to bump.", KIND_MISSING)
+        report.flag("document", "Could not detect a fiscal year in the document.", KIND_MISSING)
 
     cover = _coerce_date(cover_date if cover_date is not None else opp.get("cover_date"), today)
     as_of_year = cover.year
 
     log(f"Detected FY {detected_fy} -> target FY {target_fy}; cover date {_fmt_date(cover)}")
 
-    if target_fy:
+    if target_fy and target_fy != detected_fy:
         apply_fiscal_year(doc, target_fy, report)
     apply_cover_dates(doc, cover, report)
     apply_ongoing_end_dates(doc, as_of_year, report)
-    _flag_new_entities(doc, store, report)
+    apply_store_sync(doc, store, as_of_year, report)
     if resumes_dir:
         from . import resumes
         resumes.add_resume_flags(report, store, resumes_dir)
@@ -161,37 +168,217 @@ def _record(report: Report, location: str, res, what: str = "value") -> None:
         )
 
 
-def _flag_new_entities(doc, store: dict, report: Report) -> None:
-    # Past-performance clients present in the store but absent from the doc.
-    doc_clients = {
-        c.strip().lower().replace("\n", " ")
-        for c in docx_map.find_past_performance_clients(doc)
-    }
-    for pp in store.get("past_performance", []):
-        name = str(pp.get("client", "")).strip()
-        if name and name.lower().replace("\n", " ") not in doc_clients:
-            report.flag(
-                "Past Performance",
-                f"Store has a client not in the base doc: add a block manually.",
-                KIND_ADD,
-                new=name,
-            )
+def _norm_name(name: str) -> str:
+    """Normalize for matching: case, commas, and any whitespace (incl. newlines).
 
-    # Projects in the store with no matching Capacity row.
+    The doc's block headers wrap the client over two lines with no comma, while
+    a store entry naturally reads 'City & County of Honolulu, Department of...'
+    -- both normalize to the same key.
+    """
+    return re.sub(r"[\s,]+", " ", name).strip().lower()
+
+
+# --- store sync: append/update Sections II, III, IV in the base document ----
+
+def _end_str(project: dict, as_of_year: int) -> str:
+    end = project.get("end")
+    if end in (None, "", "ongoing"):
+        return f"{as_of_year}+"
+    return str(end)
+
+
+def _update_cell(cell, new_text: str, report: Report, location: str, what: str) -> None:
+    """Set a cell's text when the store value differs (empty store value = skip)."""
+    if not new_text:
+        return
+    old = cell.text.strip()
+    if _norm_name(old) == _norm_name(new_text):
+        return
+    set_cell_text(cell, new_text)
+    report.applied(location, f"updated {what} from store", old, new_text)
+
+
+def sync_past_performance(doc, past_performance: list, report: Report) -> None:
+    """Public entry for Section III sync (shared with generate mode)."""
+    _sync_past_performance(doc, past_performance, report)
+
+
+def apply_store_sync(doc, store: dict, as_of_year: int, report: Report) -> None:
+    """Sync store-managed content into the document (PRIMARY mode).
+
+    New entries are appended by cloning the section's own formatting; changed
+    fields on matched entries are updated in place. Rows/blocks in the document
+    that the store doesn't mention are left untouched (delete by hand).
+    """
+    _sync_qualifications(doc, store.get("personnel") or [], report)
+    _sync_past_performance(doc, store.get("past_performance") or [], report)
+    _sync_capacity(doc, store.get("projects") or [], as_of_year, report)
+
+
+def _sync_capacity(doc, projects: list, as_of_year: int, report: Report) -> None:
+    if not projects:
+        return
     tbl = docx_map.find_capacity_table(doc)
-    if tbl is not None and store.get("projects"):
-        rows = set()
-        for row in tbl.rows[1:]:
-            client = row.cells[0].text.strip().lower()
-            project = row.cells[1].text.strip().lower()
-            rows.add((client, project))
-        for proj in store["projects"]:
-            key = (str(proj.get("client", "")).strip().lower(),
-                   str(proj.get("project", "")).strip().lower())
-            if key not in rows:
-                report.flag(
-                    "Capacity",
-                    "Store has a project not in the base Capacity table: add a row manually.",
-                    KIND_ADD,
-                    new=f"{proj.get('client','')} / {proj.get('project','')}",
-                )
+    if tbl is None:
+        report.flag("Capacity", "Capacity table not found; add the store projects manually.",
+                    KIND_MISSING)
+        return
+    rows_by_key = {}
+    for row in tbl.rows[1:]:
+        key = (_norm_name(row.cells[0].text), _norm_name(row.cells[1].text))
+        rows_by_key.setdefault(key, row)
+    for proj in projects:
+        client = str(proj.get("client", ""))
+        project = str(proj.get("project", ""))
+        key = (_norm_name(client), _norm_name(project))
+        start = str(proj.get("start_year", "") or "")
+        end = _end_str(proj, as_of_year)
+        row = rows_by_key.get(key)
+        if row is None:
+            append_cloned_row(tbl, [client, project, start, end])
+            report.applied("Capacity", "added project row from store",
+                           new=f"{client} / {project} ({start}–{end})")
+        else:
+            loc = f"Capacity '{client or project}'"
+            _update_cell(row.cells[2], start, report, loc, "Start Date")
+            _update_cell(row.cells[3], end, report, loc, "End Date")
+
+
+def _sync_qualifications(doc, personnel: list, report: Report) -> None:
+    if not personnel:
+        return
+    tables = docx_map.find_table_by_signature(doc, docx_map.SIG_QUALIFICATIONS)
+    if not tables:
+        report.flag("Qualifications", "Resource/Qualifications table not found; "
+                    "add the store personnel manually.", KIND_MISSING)
+        return
+    tbl = tables[0]
+    rows_by_name = {}
+    for row in tbl.rows[1:]:
+        rows_by_name.setdefault(_norm_name(row.cells[0].text), row)
+    for person in personnel:
+        name = str(person.get("name", "")).strip()
+        if not name:
+            continue
+        quals = str(person.get("qualifications") or person.get("role") or "")
+        row = rows_by_name.get(_norm_name(name))
+        if row is None:
+            append_cloned_row(tbl, [name, quals])
+            report.applied("Qualifications", "added resource row from store", new=name)
+        else:
+            _update_cell(row.cells[1], quals, report,
+                         f"Qualifications '{name}'", "qualifications")
+
+
+# Past-performance block row labels -> store fields.
+_PP_FIELD_BY_LABEL = {
+    "client": "client",
+    "project": "project",
+    "client contact": "contact",
+    "client phone": "phone",
+    "detailed scope of work": "scope",
+    "issue resolution": "issue_resolution",
+}
+
+
+def _pp_blocks(doc) -> list[tuple[Table, str, str]]:
+    """Every 2-col past-performance block as (table, norm_client, norm_project)."""
+    out = []
+    for t in doc.tables:
+        if not t.rows or len(t.rows[0].cells) != 2:
+            continue
+        if t.rows[0].cells[0].text.strip().lower() != docx_map.SIG_PASTPERF_FIRST_CELL:
+            continue
+        client = t.rows[0].cells[1].text
+        project = t.rows[1].cells[1].text if len(t.rows) > 1 else ""
+        out.append((t, _norm_name(client), _norm_name(project)))
+    return out
+
+
+def _fill_pp_block(tbl: Table, entry: dict, report: Report, location: str,
+                   *, update_only: bool) -> None:
+    """Write store fields into a block's value cells (matched by row label)."""
+    for row in tbl.rows:
+        field = _PP_FIELD_BY_LABEL.get(_norm_name(row.cells[0].text))
+        if field is None:
+            continue
+        value = str(entry.get(field, "") or "")
+        if update_only:
+            _update_cell(row.cells[1], value, report, location, field.replace("_", " "))
+        elif value:
+            set_cell_text(row.cells[1], value)
+
+
+def _pp_label_paragraph(tbl_element):
+    """The lettered client paragraph immediately above a PP block (or None)."""
+    el = tbl_element.getprevious()
+    hops = 0
+    while el is not None and hops < 3:
+        if el.tag.endswith("}p"):
+            from docx.text.paragraph import Paragraph
+            p = Paragraph(el, None)
+            if "".join(r.text for r in p.runs).strip():
+                return el
+        elif el.tag.endswith("}tbl"):
+            return None
+        el = el.getprevious()
+        hops += 1
+    return None
+
+
+def _sync_past_performance(doc, past_performance: list, report: Report) -> None:
+    if not past_performance:
+        return
+    blocks = _pp_blocks(doc)
+    if not blocks:
+        for pp in past_performance:
+            report.flag("Past Performance",
+                        "No existing block to clone: add this engagement manually.",
+                        KIND_ADD, new=str(pp.get("client", "")))
+        return
+
+    def find_block(nclient, nproject):
+        exact = [t for t, c, p in blocks if c == nclient and p == nproject]
+        if exact:
+            return exact[0]
+        same_client = [t for t, c, _p in blocks if c == nclient]
+        if not nproject:
+            # A project-less store record can't disambiguate between a client's
+            # blocks -- match the first rather than ever appending a duplicate.
+            return same_client[0] if same_client else None
+        # Named project with no exact match: a genuinely new engagement
+        # (append), even when the client already has other blocks.
+        return None
+
+    import copy as _copy
+    for pp in past_performance:
+        client = str(pp.get("client", "")).strip()
+        if not client:
+            continue
+        project = str(pp.get("project", "") or "")
+        tbl = find_block(_norm_name(client), _norm_name(project))
+        label = f"Past Performance '{client}'" + (f" / '{project}'" if project else "")
+        if tbl is not None:
+            _fill_pp_block(tbl, pp, report, label, update_only=True)
+            continue
+        # Append a new block: clone the last block's table (+ its lettered
+        # client paragraph, whose list numbering continues automatically).
+        model_tbl, _c, _p = blocks[-1]
+        new_tbl_el = _copy.deepcopy(model_tbl._tbl)
+        model_tbl._tbl.addnext(new_tbl_el)
+        label_el = _pp_label_paragraph(model_tbl._tbl)
+        if label_el is not None:
+            from docx.text.paragraph import Paragraph
+            new_label_el = _copy.deepcopy(label_el)
+            new_tbl_el.addprevious(new_label_el)
+            para = Paragraph(new_label_el, model_tbl._parent)
+            if para.runs:
+                para.runs[0].text = client
+                for r in para.runs[1:]:
+                    r.text = ""
+            else:
+                para.add_run(client)
+        new_tbl = Table(new_tbl_el, model_tbl._parent)
+        _fill_pp_block(new_tbl, pp, report, label, update_only=False)
+        blocks.append((new_tbl, _norm_name(client), _norm_name(project)))
+        report.applied("Past Performance", "added engagement block from store", new=client)

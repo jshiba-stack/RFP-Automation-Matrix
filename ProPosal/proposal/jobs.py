@@ -3,20 +3,87 @@
 from __future__ import annotations
 
 import datetime as _dt
+import shutil
+import tempfile
 from pathlib import Path
 
 from . import (compliance, config, datastore, formatcheck, formfill, forms,
-               generator, notice, pdfutil, updater)
+               generator, notice, pdfutil, resumes, updater)
+from .flags import KIND_ADD, KIND_MISSING
 
 
 def _now_iso() -> str:
     return _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
-def _run_checks(doc, store, cfg, out_docx: Path, template, log) -> dict:
+def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log) -> str | None:
+    """Assemble the deliverable PDF the way the real submittals are built:
+    the exported body PDF + each person's one-page resume PDF, in Section II
+    order. (Resumes never live in the .docx -- see the FY2026 references.)
+
+    Returns the assembled PDF's path, or None when it can't be built (each
+    reason is flagged).
+    """
+    personnel = store.get("personnel") or []
+    if not personnel:
+        return None
+
+    # Body PDF: export via Word; else use a PDF the user exported themselves.
+    body_pdf = pdfutil.export_pdf(out_docx, out_docx.with_suffix(".pdf"))
+    if body_pdf is None:
+        body_pdf = pdfutil.find_companion_pdf(out_docx)
+    if body_pdf is None:
+        report.flag("Submittal PDF",
+                    "Couldn't export the draft to PDF (Word unavailable?). Export it "
+                    "from Word next to the draft and rebuild to assemble.", KIND_MISSING)
+        return None
+
+    parts: list[Path] = [Path(body_pdf)]
+    pages = 0
+    tmpdir: Path | None = None
+    if resumes_dir and Path(resumes_dir).is_dir():
+        res = resumes.cross_check(personnel, resumes_dir)
+        for name, path in res["matched"]:
+            ext = path.suffix.lower()
+            if ext == ".pdf":
+                parts.append(path)
+                report.applied("Submittal PDF", f"resume page: {name}", new=path.name)
+            elif ext == ".docx":
+                tmpdir = tmpdir or Path(tempfile.mkdtemp(prefix="proposal_resume_"))
+                conv = pdfutil.export_pdf(path, tmpdir / f"{path.stem}.pdf")
+                if conv:
+                    parts.append(conv)
+                    report.applied("Submittal PDF",
+                                   f"resume page (converted from .docx): {name}", new=path.name)
+                else:
+                    report.flag("Submittal PDF",
+                                f"couldn't convert {name}'s .docx resume to PDF -- "
+                                "export it manually.", KIND_ADD, new=path.name)
+            else:
+                report.flag("Submittal PDF",
+                            f"resume for {name} is {ext} ({path.name}); provide a PDF "
+                            "or .docx.", KIND_ADD, new=path.name)
+    else:
+        report.flag("Submittal PDF",
+                    "No resumes folder attached -- assembled the body only.", KIND_ADD)
+
+    try:
+        merged = pdfutil.merge_pdfs(parts)
+    finally:
+        if tmpdir is not None:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+    sub = out_docx.with_name(f"{out_docx.stem} (SUBMITTAL).pdf")
+    sub.write_bytes(merged)
+    report.applied("Submittal PDF",
+                   f"assembled body + {len(parts) - 1} resume page(s) -> {sub.name}")
+    log(f"Assembled submittal PDF -> {sub}")
+    return str(sub)
+
+
+def _run_checks(doc, store, cfg, out_docx: Path, template, log, pdf_path=None) -> dict:
     """Run the compliance checklist + format check; print and persist them."""
-    pdf = None
-    if cfg.get("auto_export_pdf"):
+    pdf = Path(pdf_path) if pdf_path else None
+    if pdf is None and cfg.get("auto_export_pdf"):
         pdf = pdfutil.export_pdf(out_docx)
         if pdf:
             log(f"Exported measurement PDF: {pdf}")
@@ -71,6 +138,7 @@ def run_build(
 
     doc.save(str(out_docx))
     report.output = str(out_docx)
+    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log)
     out_flags.write_text(report.to_markdown(), encoding="utf-8")
 
     config.update_state(
@@ -82,8 +150,9 @@ def run_build(
     log(report.to_console())
     log(f"\nSaved draft -> {out_docx}")
     log(f"Flag report -> {out_flags}")
-    checks = _run_checks(doc, store, cfg, out_docx, base, log)
-    return {"output": str(out_docx), "flags": len(report.flags), "report": report, **checks}
+    checks = _run_checks(doc, store, cfg, out_docx, base, log, pdf_path=submittal)
+    return {"output": str(out_docx), "flags": len(report.flags), "report": report,
+            "submittal": submittal, **checks}
 
 
 def run_generate(
@@ -123,6 +192,7 @@ def run_generate(
 
     doc.save(str(out_docx))
     report.output = str(out_docx)
+    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log)
     out_flags.write_text(report.to_markdown(), encoding="utf-8")
 
     config.update_state(
@@ -134,8 +204,9 @@ def run_generate(
     log(report.to_console())
     log(f"\nSaved generated draft -> {out_docx}")
     log(f"Flag report -> {out_flags}")
-    checks = _run_checks(doc, store, cfg, out_docx, template, log)
-    return {"output": str(out_docx), "flags": len(report.flags), "report": report, **checks}
+    checks = _run_checks(doc, store, cfg, out_docx, template, log, pdf_path=submittal)
+    return {"output": str(out_docx), "flags": len(report.flags), "report": report,
+            "submittal": submittal, **checks}
 
 
 def run_check(
@@ -219,4 +290,5 @@ def run_fill(
         log("Template is not fillable -- no PDF produced.")
     out_flags.write_text(report.to_markdown(), encoding="utf-8")
     log(report.to_console())
-    return {"output": output, "flags": len(report.flags), "report": report}
+    return {"output": output, "flags": len(report.flags), "report": report,
+            "flags_md": str(out_flags)}

@@ -11,11 +11,25 @@ FLAG-ONLY and clearly worded -- it never edits a document and never blocks.
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .checks import ChecklistReport
+
+
+def _parse_deadline(text: str) -> _dt.date | None:
+    """'May 30, 2025' (comma optional) -> date; None if it doesn't parse."""
+    m = re.search(r"([A-Z][a-z]+) (\d{1,2}),?\s*(20\d\d)", text or "")
+    if not m:
+        return None
+    for fmt in ("%B %d %Y", "%b %d %Y"):
+        try:
+            return _dt.datetime.strptime(" ".join(m.groups()), fmt).date()
+        except ValueError:
+            continue
+    return None
 
 # Map a store department code -> a keyword found in the notice's heading.
 DEPT_KEYWORDS = {
@@ -159,9 +173,14 @@ def validate(notice: NoticeInfo, store: dict, target_fy: int | None = None) -> C
         rep.pass_("Fiscal year", f"notice FY{notice.fiscal_year}"
                   + (f" matches FY{want_fy}" if want_fy else ""))
 
-    # 2. Deadline + caps (informational)
+    # 2. Deadline + caps (informational; FAIL only when clearly already past)
     if notice.deadline:
-        rep.warn("Submittal deadline", f"{notice.deadline} (4:30 p.m. HST) -- verify it hasn't passed")
+        due = _parse_deadline(notice.deadline)
+        if due and due < _dt.date.today():
+            rep.fail("Submittal deadline",
+                     f"{notice.deadline} has passed -- is this last year's notice?")
+        else:
+            rep.warn("Submittal deadline", f"{notice.deadline} (4:30 p.m. HST) -- verify it hasn't passed")
     if notice.pdf_size_cap_mb:
         rep.pass_("Attachment size cap", f"notice: {notice.pdf_size_cap_mb} MB per attachment")
     if notice.submittal_email:

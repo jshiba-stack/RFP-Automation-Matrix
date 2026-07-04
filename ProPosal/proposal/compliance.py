@@ -48,22 +48,31 @@ def run_checklist(doc_or_path, store: dict | None = None, cfg: dict | None = Non
     else:
         rep.pass_("Required sections present", "all 6 sections + cover letter")
 
-    # 2. Selected categories within the allowed set
+    # 2. Selected categories within the allowed set. Only an explicit
+    # `opportunity.allowed_categories` is authoritative -- the store's
+    # `categories` list is *descriptive* (often partial), so using it as the
+    # allowed set false-fails valid stores. Without an explicit set we can't
+    # verify offline: WARN and point at the notice validation.
     selected = [str(c) for c in opp.get("selected_categories", [])]
-    allowed = [str(c) for c in opp.get("allowed_categories", [])] or [
-        str(c.get("dit_number")) for c in store.get("categories", []) if c.get("dit_number")
-    ]
+    allowed = [str(c) for c in opp.get("allowed_categories", [])]
     if not selected:
         rep.warn("Categories within allowed set", "no selected_categories in store")
     elif not allowed:
         rep.warn("Categories within allowed set",
-                 "no allowed set known offline; run notice validation (Phase 5)")
+                 "no allowed_categories in store; verify with 'Validate vs notice' (4a)")
     else:
         bad = [c for c in selected if c not in allowed]
         if bad:
             rep.fail("Categories within allowed set", f"not allowed: {', '.join(bad)}")
         else:
             rep.pass_("Categories within allowed set", f"{len(selected)} selected")
+    # Soft consistency: selections with no matching description in Section I.
+    described = {str(c.get("dit_number")) for c in store.get("categories", [])
+                 if c.get("dit_number")}
+    undescribed = [c for c in selected if described and c not in described]
+    if undescribed:
+        rep.warn("Selected categories described in store",
+                 f"no `categories` entry for: {', '.join(undescribed)}")
 
     # 3 & 4. PDF size + page count (need an exported PDF)
     pdf = Path(pdf_path) if pdf_path else None

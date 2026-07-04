@@ -60,15 +60,101 @@ def test_ongoing_uses_cover_date_year():
     assert "2027+" in texts and "2025+" not in texts
 
 
-def test_new_store_project_is_flagged_add_manually():
+def test_fiscal_year_kept_without_store_or_override():
+    """No more silent detected+1: the document keeps its own year by default."""
+    from docx import Document
+
+    base_joined = "\n".join(_all_texts(Document(str(BASE))))
+    doc, report = updater.build(BASE, {}, cover_date="2026-03-02")
+    joined = "\n".join(_all_texts(doc))
+    detected = "Fiscal Year 2026" in base_joined
+    assert detected and "Fiscal Year 2026" in joined and "Fiscal Year 2027" not in joined
+    assert not [r for r in report.applied_records if "Fiscal year" in r.location]
+    # the store's opportunity.fiscal_year still drives a bump when present
+    doc2, _ = updater.build(BASE, {"opportunity": {"fiscal_year": 2027}}, cover_date="2026-03-02")
+    assert "Fiscal Year 2027" in "\n".join(_all_texts(doc2))
+
+
+def test_new_store_project_row_is_appended():
     store = {
         "projects": [
-            {"id": "x", "client": "Brand New Client LLC", "project": "Net-New Thing", "end": "ongoing"}
+            {"id": "x", "client": "Brand New Client LLC", "project": "Net-New Thing",
+             "start_year": 2026, "end": "ongoing"}
         ]
     }
-    _, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
-    add_flags = [f for f in report.flags if f.kind == "ADD MANUALLY"]
-    assert any("Brand New Client" in f.new for f in add_flags)
+    doc, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
+    from proposal import docx_map
+    tbl = docx_map.find_capacity_table(doc)
+    last = tbl.rows[-1]
+    assert last.cells[0].text.strip() == "Brand New Client LLC"
+    assert last.cells[1].text.strip() == "Net-New Thing"
+    assert last.cells[3].text.strip() == "2026+"        # ongoing renders as-of-year+
+    assert any("added project row" in r.summary for r in report.applied_records)
+    assert not [f for f in report.flags if f.kind == "ADD MANUALLY"]
+
+
+def test_changed_store_project_updates_row_in_place():
+    from docx import Document
+
+    from proposal import docx_map
+    base_tbl = docx_map.find_capacity_table(Document(str(BASE)))
+    row1 = base_tbl.rows[1]
+    client, project = row1.cells[0].text.strip(), row1.cells[1].text.strip()
+    store = {"projects": [{"id": "x", "client": client, "project": project,
+                           "start_year": 1999, "end": 2024}]}
+    doc, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
+    tbl = docx_map.find_capacity_table(doc)
+    assert len(tbl.rows) == len(base_tbl.rows)          # updated, not appended
+    assert tbl.rows[1].cells[2].text.strip() == "1999"
+    assert tbl.rows[1].cells[3].text.strip() == "2024"
+    assert sum("updated" in r.summary and "from store" in r.summary
+               for r in report.applied_records) == 2
+
+
+def test_new_pp_block_is_appended_with_cloned_formatting():
+    from proposal import updater as _u
+    store = {"past_performance": [{
+        "id": "pp-new", "client": "Brand New Client LLC", "project": "Net-New Thing",
+        "contact": "Pat Example", "phone": "(808) 555-0100",
+        "scope": "Did the thing.", "issue_resolution": "No issues.",
+    }]}
+    doc, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
+    blocks = _u._pp_blocks(doc)
+    assert any(c == _u._norm_name("Brand New Client LLC") for _t, c, _p in blocks)
+    new_tbl = blocks[-1][0]
+    texts = {r.cells[0].text.strip().lower(): r.cells[1].text.strip() for r in new_tbl.rows}
+    assert texts["project"] == "Net-New Thing"
+    assert texts["detailed scope of work"] == "Did the thing."
+    assert any("added engagement block" in r.summary for r in report.applied_records)
+
+
+def test_projectless_pp_record_never_duplicates_a_block():
+    """Old (client-only) store records must match an existing block for that
+    client -- even when the client has several blocks -- not append a copy."""
+    from docx import Document
+
+    from proposal import updater as _u
+    base_blocks = _u._pp_blocks(Document(str(BASE)))
+    clients = [c for _t, c, _p in base_blocks]
+    dup_client = next((c for c in clients if clients.count(c) > 1), clients[0])
+    # reconstruct the display client from the doc for the store record
+    tbl = next(t for t, c, _p in base_blocks if c == dup_client)
+    display = tbl.rows[0].cells[1].text.replace("\n", " ").strip()
+    store = {"past_performance": [{"id": "pp-x", "client": display}]}   # no project
+    doc, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
+    assert len(_u._pp_blocks(doc)) == len(base_blocks)      # nothing appended
+    assert not any("added engagement block" in r.summary for r in report.applied_records)
+
+
+def test_new_personnel_row_is_appended():
+    from proposal import docx_map
+    store = {"personnel": [{"id": "p-new", "name": "Brandnew Person",
+                            "qualifications": "Certified example engineer."}]}
+    doc, report = updater.build(BASE, store, target_fy=2027, cover_date="2026-03-02")
+    tbl = docx_map.find_table_by_signature(doc, docx_map.SIG_QUALIFICATIONS)[0]
+    assert tbl.rows[-1].cells[0].text.strip() == "Brandnew Person"
+    assert tbl.rows[-1].cells[1].text.strip() == "Certified example engineer."
+    assert any("added resource row" in r.summary for r in report.applied_records)
 
 
 if __name__ == "__main__":

@@ -65,6 +65,13 @@ def _hhmm(hour: int, minute: int) -> str:
     return f"{int(hour):02d}:{int(minute):02d}"
 
 
+def _check(proc: subprocess.CompletedProcess, what: str) -> None:
+    """Raise with schtasks' own message if a create/delete failed."""
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        raise RuntimeError(f"{what} failed: {detail[0] if detail else 'schtasks error'}")
+
+
 def _create_scan_task(cfg: dict) -> None:
     sc = cfg["scan_schedule"]
     start = _hhmm(sc.get("hour", 6), sc.get("minute", 0))
@@ -74,7 +81,8 @@ def _create_scan_task(cfg: dict) -> None:
         sched = ["/SC", "HOURLY", "/MO", "12", "/ST", start]
     else:
         sched = ["/SC", "DAILY", "/ST", start]
-    _run(["/Create", "/TN", SCAN_TASK, "/TR", tr, *sched, "/F"])
+    _check(_run(["/Create", "/TN", SCAN_TASK, "/TR", tr, *sched, "/F"]),
+           f"Creating scheduled task {SCAN_TASK}")
 
 
 def _create_email_task(cfg: dict) -> None:
@@ -84,14 +92,18 @@ def _create_email_task(cfg: dict) -> None:
     if not days:
         days = ["MON"]
     tr = f'"{_wrapper_path()}" email'
-    _run([
+    _check(_run([
         "/Create", "/TN", EMAIL_TASK, "/TR", tr,
         "/SC", "WEEKLY", "/D", ",".join(days), "/ST", start, "/F",
-    ])
+    ]), f"Creating scheduled task {EMAIL_TASK}")
 
 
 def sync_tasks(cfg: dict | None = None) -> None:
-    """(Re)create both scheduled tasks from the current config. Idempotent."""
+    """(Re)create both scheduled tasks from the current config. Idempotent.
+
+    Raises ``RuntimeError`` if schtasks refuses, so the caller can tell the
+    user their schedule was NOT registered instead of failing silently.
+    """
     if not available():
         return
     cfg = cfg or config.load_config()

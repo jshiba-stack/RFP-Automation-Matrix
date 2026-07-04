@@ -117,8 +117,9 @@ def replace_in_paragraph(
     # last touched run = run containing end-1 (end is exclusive)
     last_i = next(i for i, s, e in bounds if s <= end - 1 < e)
 
-    # uniformity check across touched runs
-    sigs = {_rpr_signature(runs[i]) for i in range(first_i, last_i + 1)}
+    # uniformity check across touched runs (empty runs render nothing, so
+    # their rPr can't change how the text looks -- ignore them)
+    sigs = {_rpr_signature(runs[i]) for i in range(first_i, last_i + 1) if runs[i].text}
     uniform = len(sigs) <= 1
 
     result = ReplaceResult(
@@ -184,6 +185,25 @@ def set_cell_text(cell: _Cell, text: str) -> None:
             r.text = ""
     else:
         para.add_run(text)
+
+
+def append_cloned_row(table: Table, values: list[str], *, model_row: int = -1):
+    """Append one data row, cloning an existing row's formatting/borders.
+
+    ``model_row`` indexes the existing data rows (default: the last one).
+    Returns the new row. Values are padded/truncated to the column count.
+    """
+    data_rows = table.rows[1:]
+    if not data_rows:
+        raise ValueError("table has no data row to use as a formatting model")
+    new_tr = copy.deepcopy(data_rows[model_row]._tr)
+    table._tbl.append(new_tr)
+    new_row = table.rows[-1]
+    ncols = len(table.columns)
+    padded = list(values)[:ncols] + [""] * (ncols - len(values))
+    for ci, val in enumerate(padded):
+        set_cell_text(new_row.cells[ci], val)
+    return new_row
 
 
 def rebuild_table_body(table: Table, rows: list[list[str]], *, model_row: int = 1) -> int:

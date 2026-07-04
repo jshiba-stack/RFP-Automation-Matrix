@@ -53,10 +53,20 @@ In the dashboard you (1) link a **materials source** — a SharePoint library yo
 **Synced** to a local folder (via *Add shortcut to OneDrive*, which respects your
 sign-in), your OneDrive, or any local folder; add as many as you like and switch
 between them as tabs. ProPosal then discovers your past submittals and data stores
-and offers them as dropdowns. You (2a) pick a version to update from, or (2b) pick
-a template + store to generate, and (3) review the flag report, compliance
-checklist, and format check inline with download links. No path typing or manual
-settings, and nothing is linked automatically.
+and offers them as dropdowns. Step (2) maintains your **submittal content** in the
+data store with forms that mirror the proposal's own tables — (2a) Personnel &
+Resumes with the resume folder cross-reference, (2b) Past Performance blocks,
+(2c) the Capacity project listing — each with edit / delete / reorder on existing
+entries. Step (3) builds the draft **and assembles the submittal PDF**: pick any
+starting document (previous version or template), ProPosal syncs your step-2
+content into it, exports the body to PDF via Word, and merges each person's
+one-page resume PDF after it in Section II order — exactly how the real
+submittals are put together (resumes never live in the .docx). Step (4) checks &
+forms — (4a) validate against the City's annual notice PDF, (4b) fill a PDF form
+(DPW-120/SF330). Step (5) shows the flag report, compliance checklist (measured
+against the assembled PDF), and format check inline with download links. Fiscal
+year and dates update automatically (override under *Advanced*); no path typing,
+and nothing is linked automatically.
 
 > **SharePoint:** ProPosal reads files from a local folder, so sync the library
 > first (open it in the browser → **Sync** / **Add shortcut to OneDrive**). It
@@ -78,8 +88,8 @@ copy docs\data_store.example.yaml data\stores\store.yaml   # then edit it
 
 Flags / overrides:
 
-- `--fy 2027` — target fiscal year (default: detected year + 1, or the store's
-  `opportunity.fiscal_year`).
+- `--fy 2027` — target fiscal year (default: the store's
+  `opportunity.fiscal_year`, else the document keeps its own year).
 - `--date "2026-03-02"` — cover date (default: today, or the store's
   `opportunity.cover_date`).
 - `--store` is repeatable; stores are deep-merged in order (a stable `firm.yaml`

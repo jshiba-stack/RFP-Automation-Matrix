@@ -26,6 +26,9 @@ def run_scan(cfg: dict | None = None, log=print) -> dict:
         f"Spreadsheet updated: {result['new']} new, {result['updated']} updated, "
         f"{result['total_rows']} total rows"
     )
+    if result.get("diverted"):
+        log(f"NOTE: workbook was open/locked -- results saved to {result['saved_to']}. "
+            "Close Excel and re-run the scan to merge into the main file.")
     config.update_state(
         last_scan=_now_iso(),
         last_scan_count=len(details),

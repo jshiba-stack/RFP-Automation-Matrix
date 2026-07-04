@@ -37,6 +37,9 @@ def _run_in_thread(kind: str, func):
             if kind == "scan":
                 res = func()
                 msg = f"Scan complete: {res['new']} new, {res['updated']} updated."
+                if res.get("diverted"):
+                    msg += (f" Workbook was open in Excel — saved to "
+                            f"{res['saved_to']} instead; close Excel and re-scan to merge.")
             else:
                 info = func()
                 msg = f"Email sent to {', '.join(info['recipients'])}."
@@ -114,10 +117,9 @@ def save():
 
     try:
         scheduler.reschedule(cfg)
-    except Exception:  # noqa: BLE001
-        pass
-
-    flash("Settings saved.", "success")
+        flash("Settings saved.", "success")
+    except Exception as exc:  # noqa: BLE001 - settings saved, but schedule didn't register
+        flash(f"Settings saved, but the schedule was NOT registered: {exc}", "error")
     return redirect(url_for("index"))
 
 

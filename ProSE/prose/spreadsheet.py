@@ -143,8 +143,9 @@ def update_spreadsheet(path, details: list[dict]) -> dict:
     for rec in existing:
         key = str(rec.get(SOLICITATION_COL) or "").strip()
         if key:
-            by_key[key] = rec
-            order.append(key)
+            if key not in by_key:      # hand-added duplicate rows: keep the first
+                order.append(key)
+            by_key.setdefault(key, rec)
         else:
             carry.append(rec)
 
@@ -197,10 +198,22 @@ def update_spreadsheet(path, details: list[dict]) -> dict:
     # Re-assert header styling (cheap, keeps look consistent).
     _style_header(ws)
     path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(path)
+    saved_to = path
+    try:
+        wb.save(path)
+    except PermissionError:
+        # The workbook is open in Excel (Windows locks it). Don't lose the
+        # scan: save to a timestamped sibling and report where it went.
+        from datetime import datetime
+
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        saved_to = path.with_name(f"{path.stem} (scan {stamp}){path.suffix}")
+        wb.save(saved_to)
 
     return {
         "new": new_count,
         "updated": updated_count,
         "total_rows": len(ordered_records),
+        "saved_to": str(saved_to),
+        "diverted": saved_to != path,
     }

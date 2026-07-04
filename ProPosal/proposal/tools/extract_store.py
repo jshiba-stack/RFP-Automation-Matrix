@@ -103,11 +103,31 @@ def extract(path: str) -> OrderedDict:
                                         project=c[1], start_year=start, end=end))
     store["projects"] = projects
 
-    # Past performance (client names)
+    # Past performance: one record per 2-col block, all six fields (matched by
+    # row label so the store can update/rebuild blocks later).
+    label_to_field = {
+        "client": "client", "project": "project", "client contact": "contact",
+        "client phone": "phone", "detailed scope of work": "scope",
+        "issue resolution": "issue_resolution",
+    }
     pp = []
-    for client in docx_map.find_past_performance_clients(doc):
-        name = client.replace("\n", " ").strip()
-        pp.append(OrderedDict(id=f"pp-{_slug(name)}", client=name))
+    for t in doc.tables:
+        if not t.rows or len(t.rows[0].cells) != 2:
+            continue
+        if t.rows[0].cells[0].text.strip().lower() != docx_map.SIG_PASTPERF_FIRST_CELL:
+            continue
+        rec = OrderedDict()
+        for row in t.rows:
+            field = label_to_field.get(re.sub(r"\s+", " ", row.cells[0].text).strip().lower())
+            if field:
+                value = row.cells[1].text.strip()
+                # client reads better on one line; scope keeps its line breaks
+                rec[field] = value.replace("\n", " ") if field == "client" else value
+        if rec.get("client"):
+            rec_id = f"pp-{_slug(rec['client'])}"
+            if rec.get("project"):
+                rec_id += f"-{_slug(rec['project'], 16)}"
+            pp.append(OrderedDict(id=rec_id, **rec))
     store["past_performance"] = pp
 
     return store

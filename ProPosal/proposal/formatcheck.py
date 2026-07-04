@@ -48,15 +48,22 @@ def check_format(doc_or_path, template_or_path=None) -> ChecklistReport:
     else:
         rep.fail("Page numbering intact", "no PAGE field found")
 
-    # headings use a heading style
-    style_by_text = {para_text(p).strip(): (p.style.name if p.style else "") for p in doc.paragraphs}
+    # headings use a heading style. Prefer a heading/title-styled paragraph
+    # (prose can mention a heading's text without being it); fall back to a
+    # paragraph that *starts with* the heading, whose style is then reported.
+    paras = [(para_text(p).strip(), p.style.name if p.style else "") for p in doc.paragraphs]
     bad_headings = []
     for h in docx_map.REQUIRED_HEADINGS:
-        match = next((t for t in style_by_text if h.lower() in t.lower()), None)
+        hl = h.lower()
+        styled = next((s for t, s in paras
+                       if hl in t.lower() and ("heading" in s.lower() or "title" in s.lower())), None)
+        if styled is not None:
+            continue
+        match = next((s for t, s in paras if t.lower().startswith(hl)), None)
         if match is None:
             bad_headings.append(f"{h} (missing)")
-        elif "heading" not in style_by_text[match].lower() and "title" not in style_by_text[match].lower():
-            bad_headings.append(f"{h} (style={style_by_text[match]!r})")
+        else:
+            bad_headings.append(f"{h} (style={match!r})")
     if bad_headings:
         rep.fail("Heading styles intact", "; ".join(bad_headings))
     else:

@@ -8,6 +8,7 @@ git-ignored ``instance/`` folder; generated drafts live under ``data/output/``.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,10 +73,16 @@ def load_config() -> dict:
     return json.loads(json.dumps(DEFAULT_CONFIG))
 
 
-def save_config(cfg: dict) -> None:
+def _atomic_json_write(path: Path, data: dict) -> None:
+    """Write JSON via temp-file + replace so a reader never sees a half file."""
     INSTANCE.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
-        json.dump(cfg, fh, indent=2)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def save_config(cfg: dict) -> None:
+    _atomic_json_write(CONFIG_PATH, cfg)
 
 
 def load_state() -> dict:
@@ -86,9 +93,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    INSTANCE.mkdir(parents=True, exist_ok=True)
-    with open(STATE_PATH, "w", encoding="utf-8") as fh:
-        json.dump(state, fh, indent=2)
+    _atomic_json_write(STATE_PATH, state)
 
 
 def update_state(**fields) -> dict:

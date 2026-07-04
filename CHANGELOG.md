@@ -5,6 +5,35 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-04
+
+### Changed
+- **ProPosal v0.7.0 → v0.12.0** — five releases in one extended session; see
+  [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md) for detail:
+  - **Submittal assembled at the PDF level** (the way the real ones are built):
+    Build exports the body via Word and merges each person's one-page resume
+    PDF after it in Section II order → `<draft> (SUBMITTAL).pdf`, verified
+    page-for-page against the FY2026 reference (21/21 pages, all ten resume
+    pages identical). Resumes never live in the `.docx`; docxcompose dropped,
+    `docx2pdf` now required.
+  - **Content round-trip**: import Sections II/III/IV from any previous
+    submittal into dashboard editors (comment-preserving `storewrite.py` —
+    append/edit/delete/reorder), then Build syncs them back into the document
+    (new rows/blocks appended with cloned formatting, changed fields updated).
+  - **Dashboard reorganized** (source → content managers → one Build card with
+    a strict-rebuild option → checks/forms → results with per-kind flag
+    subtabs + persisted review checkboxes); port moved to 5001 so ProSE (5000)
+    can run alongside; fiscal year is never silently bumped anymore.
+  - **Resume intelligence**: per-person subfolders understood, full-name
+    matches beat shared surnames, newest one-page PDF preferred per person.
+- **ProSE v0.2.0 → v0.3.0** — robustness fixes from the suite deep review:
+  Excel-locked workbooks divert to a timestamped file instead of losing the
+  scan, duplicate solicitation rows collapse, `schtasks` failures surface,
+  atomic config/state writes. See [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md).
+- **Suite deep review (2026-07-02)** — full audit of both programs; all
+  findings remediated same day (High: a compliance-checklist false-FAIL).
+  Findings + remediation table live in the private audit notes.
+
 ## 2026-07-02
 
 ### Added

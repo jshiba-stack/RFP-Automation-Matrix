@@ -106,7 +106,8 @@ def main(argv=None) -> int:
     b = sub.add_parser("build", help="smart copy-and-update from a previous FINAL")
     b.add_argument("--base", help="path to the previous FINAL .docx")
     b.add_argument("--store", action="append", help="data store path (repeatable)")
-    b.add_argument("--fy", type=int, help="target fiscal year (default: detected + 1)")
+    b.add_argument("--fy", type=int,
+                   help="target fiscal year (default: store's, else keep the document's)")
     b.add_argument("--date", help="cover date (default: today)")
     b.set_defaults(func=_cmd_build)
 
@@ -139,7 +140,8 @@ def main(argv=None) -> int:
 
     d = sub.add_parser("dashboard", help="launch the local web dashboard (default)")
     d.add_argument("--host", default="127.0.0.1")
-    d.add_argument("--port", type=int, default=5000)
+    # 5001: ProSE's dashboard owns 5000, so both can run at the same time.
+    d.add_argument("--port", type=int, default=5001)
     d.add_argument("--no-browser", action="store_true", help="don't auto-open a browser")
     d.set_defaults(func=_cmd_dashboard)
 
@@ -151,7 +153,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         # No subcommand -> launch the dashboard (double-click friendly).
-        return _cmd_dashboard(argparse.Namespace(host="127.0.0.1", port=5000, no_browser=False))
+        return _cmd_dashboard(argparse.Namespace(host="127.0.0.1", port=5001, no_browser=False))
     return args.func(args)
 
 
