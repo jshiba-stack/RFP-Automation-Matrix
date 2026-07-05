@@ -4,7 +4,7 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] — 2026-07-02
+## [0.2.1] — 2026-07-02
 
 Robustness fixes from the 2026-07-02 suite deep review
 (`docs/audits/2026-07-02-01-suite-deep-review.md` at the repo root).

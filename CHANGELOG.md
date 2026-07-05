@@ -37,7 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     can run alongside; fiscal year is never silently bumped anymore.
   - **Resume intelligence**: per-person subfolders understood, full-name
     matches beat shared surnames, newest one-page PDF preferred per person.
-- **ProSE v0.2.0 → v0.3.0** — robustness fixes from the suite deep review:
+- **ProSE v0.2.0 → v0.2.1** — robustness fixes from the suite deep review
+  (patch: fixes only):
   Excel-locked workbooks divert to a timestamped file instead of losing the
   scan, duplicate solicitation rows collapse, `schtasks` failures surface,
   atomic config/state writes. See [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md).
