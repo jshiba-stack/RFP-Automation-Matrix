@@ -5,6 +5,34 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-07
+
+### Changed
+- **ProPosal v0.13.0 → v0.14.0** — Section I (professional service categories)
+  becomes a managed, self-standardizing section, plus a document-wide table
+  formatting standard and a tabbed UI; see
+  [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md):
+  - **Section I skill classification.** New taxonomy parser
+    (`proposal/dit_taxonomy.py`) reads the annual notice's lettered DIT list; a
+    classifier (`proposal/skills.py`) reconciles each skill against it —
+    exact-name matches auto-apply the correct letter, everything uncertain or
+    duplicated is flagged. Optional local-LLM backend (`proposal/llm/`, Ollama,
+    off by default with a deterministic fallback) sharpens the fuzzy suggestions.
+    A dashboard card extracts/edits categories with **Classify**, **Accept**, and
+    **Accept all**.
+  - **Section I rebuilt to house standard at build**: letters reconciled and
+    uppercased A–X, sorted, duplicate letters combined with item-level
+    de-duplication, canonical names in column 2, description line breaks
+    preserved; the catch-all **X** keeps per-skill titles under a merged cell.
+  - **Table formatting standard** (`proposal/proofread.py`, rewritten): every
+    table auto-fixed to 12pt / black text; borders flagged at 0.5pt except
+    Section III past-performance tables, which are auto-bordered.
+  - **UI**: dashboard split into Build vs Forms tabs; a settings/defaults modal;
+    a mandatory-documents folder (`assets/defaults/`, FY2027 notice default).
+  - **Fixes**: category-id collision (unlettered rows collided → keyed off name
+    now), scroll-to-top on every edit, smashed multi-line descriptions, and
+    stale cross-session classification state.
+
 ## 2026-07-04
 
 ### Changed

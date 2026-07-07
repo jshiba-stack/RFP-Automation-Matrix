@@ -19,7 +19,7 @@ import datetime as _dt
 
 from docx import Document
 
-from . import docx_map, updater
+from . import docx_map, skills, updater
 from .docx_edit import rebuild_table_body
 from .flags import KIND_ADD, KIND_MISSING, Report
 
@@ -64,6 +64,19 @@ def generate(
     if target_fy and target_fy != detected_fy:
         updater.apply_fiscal_year(doc, target_fy, report)
     updater.apply_cover_dates(doc, cover, report)
+
+    # --- Section I: Professional Service Categories from store.categories ---
+    categories = store.get("categories", [])
+    cats = docx_map.find_table_by_signature(doc, docx_map.SIG_CATEGORIES)
+    if not cats:
+        report.flag("Categories", "Categories table not found in template.", KIND_MISSING)
+    elif categories:
+        finalized = skills.finalize_categories(categories)
+        n = updater.write_finalized_categories(cats[0], finalized)
+        report.applied("Categories", f"rebuilt Section I from store: uppercase A-X, "
+                       f"sorted, canonical names, merged catch-all ({n} rows)")
+    else:
+        report.flag("Categories", "No categories in store; kept template rows.", KIND_ADD)
 
     # --- Capacity / Project Listing from store.projects ---
     projects = store.get("projects", [])
@@ -111,7 +124,7 @@ def generate(
     _flag_resumes(store, resumes_dir, report)
 
     # --- Sections kept from the template (not yet store-driven) ---
-    for section in ("Categories", "Additional Criteria"):
+    for section in ("Additional Criteria",):
         report.applied(section, "kept from template (not yet store-driven)")
 
     return doc, report

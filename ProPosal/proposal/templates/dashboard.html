@@ -60,7 +60,10 @@
         <h1>ProPosal</h1>
         <span class="sub">Professional Services Proposal Builder</span>
       </div>
-      <span class="badge">v{{ version }}</span>
+      <div class="topright">
+        <button type="button" class="gearbtn" onclick="openSettings()" title="Settings &amp; defaults">⚙ Settings</button>
+        <span class="badge">v{{ version }}</span>
+      </div>
     </div>
   </header>
 
@@ -137,6 +140,13 @@
       </div>
     </div>
 
+    <!-- ============ WORKFLOW TABS ============ -->
+    <div class="tabs worktabs">
+      <button type="button" class="tab wtab" data-tab="build" onclick="showTab('build')">📄 Build submittal</button>
+      <button type="button" class="tab wtab" data-tab="forms" onclick="showTab('forms')">🗂 Forms &amp; other documents</button>
+    </div>
+
+    <section id="tab-build" class="tabpanel">
     <div class="grid">
       <!-- ============ STEP 2: SUBMITTAL CONTENT (data store) ============ -->
 
@@ -164,6 +174,113 @@
             </div>
           </div>
         </form>
+      </div>
+
+      <!-- SECTION I: PROFESSIONAL SERVICE CATEGORIES (skills) -->
+      <div class="card full">
+        <h2><span class="step">I</span>Professional Service Categories (Section I) — your skills</h2>
+        <p class="lead">The DIT service categories you're applying under.
+          <strong>Classify</strong> checks each skill against the current-year notice taxonomy:
+          it auto-corrects a skill's <code class="mono">DIT&nbsp;#</code> when the category name
+          matches the notice exactly, and <strong>flags</strong> anything it can only guess at, that
+          was dropped from the notice, or that appears twice — you make the call on those.</p>
+
+        <div class="row" style="align-items:center;">
+          <form method="post" action="{{ url_for('classify') }}" style="flex:0 0 auto;">
+            <button class="btn btn-cyan" type="submit" {{ 'disabled' if not entries.categories else '' }}>⚡ Classify skills vs FY notice</button>
+          </form>
+          <div class="hint" style="flex:1; margin:0;">Engine:
+            {% if cfg.llm and cfg.llm.enabled %}local LLM (Ollama){% else %}keyword matching — enable Ollama in <button class="linklike" type="button" onclick="openSettings()">⚙ Settings</button> for better suggestions{% endif %}.</div>
+        </div>
+
+        {% if classification %}
+          <div style="margin-top:14px; border-top:1px solid var(--line); padding-top:12px;">
+            <h3 class="subh">Classification — {{ 'local LLM' if classification.used_llm else 'keyword matching' }}
+              · {{ classification.applied }} DIT&nbsp;# auto-corrected · {{ classification.flag_count }} flagged</h3>
+            {% set ns = namespace(pending=0) %}
+            {% for r in classification.results %}{% if r.suggested and r.suggested != r.current and not r.applied %}{% set ns.pending = ns.pending + 1 %}{% endif %}{% endfor %}
+            <table class="report classify">
+              <tr>
+                <th>Skill</th><th>DIT&nbsp;#&nbsp;now</th><th></th><th>Suggested</th><th>How</th>
+                <th class="acceptcell">
+                  {% if ns.pending %}
+                    <form method="post" action="{{ url_for('classify_accept_all') }}" style="display:inline;"
+                          onsubmit="return confirm('Apply all {{ ns.pending }} suggested DIT # change(s) to your data store?')">
+                      <button class="btn btn-cyan btn-mini" type="submit">✓ Accept all ({{ ns.pending }})</button>
+                    </form>
+                  {% endif %}
+                </th>
+              </tr>
+              {% for r in classification.results %}
+                {% set changing = r.suggested and r.suggested != r.current %}
+                <tr class="{{ 'chg' if changing else '' }}">
+                  <td>{{ r.name|truncate(52) }}{% if r.rationale %}<br><span class="detail">↳ {{ r.rationale|truncate(96) }}</span>{% endif %}</td>
+                  <td><code class="mono">{{ r.current or '—' }}</code></td>
+                  <td class="arrowcell">{% if changing %}<span class="arrow">→</span>{% endif %}</td>
+                  <td><code class="mono {{ 'newletter' if changing else '' }}">{{ r.suggested or '—' }}</code></td>
+                  <td><span class="detail">{{ r.kind }}{% if r.kind in ('fuzzy', 'llm') and r.confidence %} · {{ r.confidence }}{% endif %}</span></td>
+                  <td class="acceptcell">
+                    {% if r.applied %}
+                      <span class="pill kind">✓ applied</span>
+                    {% elif changing %}
+                      <form method="post" action="{{ url_for('classify_accept') }}" style="display:inline;">
+                        <input type="hidden" name="id" value="{{ r.id }}">
+                        <input type="hidden" name="letter" value="{{ r.suggested }}">
+                        <button class="btn btn-cyan btn-mini" type="submit" title="Set DIT # to '{{ r.suggested }}'">✓ Accept</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </table>
+            <div class="hint" style="margin-top:6px;">Exact matches are applied automatically; <strong>Accept</strong> applies a suggested change (LLM / keyword) to that skill's DIT&nbsp;#, then <strong>Build&nbsp;(3)</strong> writes it into the document.</div>
+            {% if classification.duplicates %}
+              <h3 class="subh" style="margin-top:12px;">Possible duplicate skills</h3>
+              {% for d in classification.duplicates %}
+                <div class="chk"><span class="mark WARN">!</span>
+                  <span><span class="name">DIT&nbsp;'{{ d.letter }}'</span>
+                    <span class="detail">— {{ d.names|join(' / ') }} · consider merging into one row</span></span></div>
+              {% endfor %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <details class="adv" style="margin-top:14px;" {{ 'open' if not entries.categories else '' }}>
+          <summary>Categories in the data store ({{ entries.categories|length }}) — add / edit / reorder</summary>
+          <div class="adv-body">
+            <form method="post" action="{{ url_for('add_entry') }}" id="form-categories">
+              <input type="hidden" name="kind" value="categories">
+              <input type="hidden" name="edit_id" value="">
+              <input type="hidden" name="edit_store" value="">
+              <table class="ptable cap">
+                <tr><th style="width:64px;">DIT #</th><th>Professional Service Category</th><th>Description</th></tr>
+                <tr>
+                  <td><input type="text" name="dit_number" placeholder="a"></td>
+                  <td><textarea name="name" rows="2" required placeholder="Web Applications – Design and Development"></textarea></td>
+                  <td><textarea name="description" rows="2" placeholder="JavaScript / Python / Django / PHP"></textarea></td>
+                </tr>
+              </table>
+              {{ store_sink(stores, workspace) }}
+              <div class="actions">
+                <button class="btn btn-primary commit-btn" type="submit" data-label="Commit new Section I category">Commit new Section I category</button>
+                <button class="btn btn-ghost cancel-edit" type="button" style="display:none;" onclick="cancelEdit('categories')">Cancel edit</button>
+              </div>
+            </form>
+
+            {% if entries.categories %}
+              <table class="report">
+                {% for rec in entries.categories %}
+                  <tr>
+                    <td style="width:44px;"><code class="mono">{{ rec.dit_number or '—' }}</code></td>
+                    <td><strong>{{ rec.name }}</strong> {{ store_badge(rec, stores) }}<br>
+                      <span class="detail">{{ (rec.description or '')|truncate(80) }}</span></td>
+                    <td style="width:110px;">{% if rec.id %}{{ entry_rowbtns('categories', rec) }}{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              </table>
+            {% else %}<p class="empty">No categories yet — import a submittal (2) or add one above.</p>{% endif %}
+          </div>
+        </details>
       </div>
 
       <!-- 2a: PERSONNEL & RESUMES (Section II) -->
@@ -213,13 +330,14 @@
 
           <div>
             <h3 class="subh">Resumes folder</h3>
-            <form method="post" action="{{ url_for('resumes_dir') }}">
-              <div class="row">
-                <div style="flex:3;"><input type="text" name="resumes_dir" id="resumesDir" value="{{ resumes_dir or '' }}" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Resumes"></div>
-                <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('resumesDir')">📁</button></div>
-                <div style="flex:0 0 auto;"><button class="btn btn-accent" type="submit">Save &amp; check</button></div>
-              </div>
-            </form>
+            {% if resumes_dir %}
+              <div class="folderbar"><code class="mono path">{{ resumes_dir }}</code>
+                <button class="btn btn-ghost" type="button" onclick="openSettings()">⚙ Change</button></div>
+            {% else %}
+              <div class="hint">No resumes folder set —
+                <button class="linklike" type="button" onclick="openSettings()">set it in Settings ⚙</button>
+                to cross-check personnel against their resume files.</div>
+            {% endif %}
             {% if resume_check %}
               <h3 class="subh" style="margin-top:14px;">Cross-reference (matched by name)</h3>
               {% for name in resume_check.missing %}
@@ -386,6 +504,11 @@
         </form>
       </div>
 
+    </div>
+    </section>
+
+    <section id="tab-forms" class="tabpanel" hidden>
+    <div class="grid">
       <!-- ============ STEP 4: CHECK & FORMS ============ -->
 
       <!-- 4a: VALIDATE AGAINST THE CITY NOTICE -->
@@ -452,7 +575,11 @@
         </form>
       </div>
 
-      <!-- ============ STEP 5: RESULTS ============ -->
+    </div>
+    </section>
+
+    <!-- ============ STEP 5: RESULTS (global — always visible below the tabs) ============ -->
+    <div class="grid">
       <div class="card full">
         <h2><span class="step">5</span>Latest result{% if result %} — {{ result.kind }}{% endif %}</h2>
         {% if not result %}
@@ -541,7 +668,129 @@
     </div>
   </div>
 
+  <!-- SETTINGS / DEFAULTS MODAL -->
+  <div id="settingsModal" class="modal-bg settings-bg" onclick="if(event.target===this)closeSettings()">
+    <div class="modal settings">
+      <div class="modal-head">
+        <strong>⚙ Settings &amp; defaults</strong>
+        <button class="x" type="button" onclick="closeSettings()">×</button>
+      </div>
+      <form method="post" action="{{ url_for('settings') }}">
+        <div class="modal-body">
+          <p class="hint" style="margin-top:0;">Machine-local defaults, saved to
+            <code class="mono">instance/config.json</code>. Paths may be absolute or relative to the
+            ProPosal folder. Mandatory reference docs live in
+            <code class="mono">assets/defaults/</code>.</p>
+          <div class="settings-grid">
+            <div class="full2">
+              <label>Default base document (previous FINAL to build from)</label>
+              <input type="text" name="base_docx_path" value="{{ cfg.base_docx_path or '' }}">
+            </div>
+            <div class="full2">
+              <label>Template document (strict / generate mode)</label>
+              <input type="text" name="template_docx_path" value="{{ cfg.template_docx_path or '' }}">
+            </div>
+            <div class="full2">
+              <label>Annual notice PDF (requirements validation + FY skill taxonomy)</label>
+              <input type="text" name="notice_pdf_path" value="{{ cfg.notice_pdf_path or '' }}">
+            </div>
+            <div class="full2">
+              <label>Resumes folder</label>
+              <div class="row">
+                <div style="flex:3;"><input type="text" name="resumes_dir" id="setResumes" value="{{ cfg.resumes_dir or '' }}" placeholder="e.g. C:\Users\you\OneDrive - Acme Corp\Resumes"></div>
+                <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('setResumes')">📁</button></div>
+              </div>
+            </div>
+            <div class="full2">
+              <label>Output folder (drafts + submittals)</label>
+              <div class="row">
+                <div style="flex:3;"><input type="text" name="output_dir" id="setOutput" value="{{ cfg.output_dir or '' }}"></div>
+                <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('setOutput')">📁</button></div>
+              </div>
+            </div>
+            <div>
+              <label>Default department</label>
+              <input type="text" name="default_department" value="{{ cfg.default_department or '' }}">
+            </div>
+            <div>
+              <label>Page limit</label>
+              <input type="number" name="page_limit" value="{{ cfg.page_limit or '' }}" min="1" max="500">
+            </div>
+            <div>
+              <label>PDF size cap (MB / attachment)</label>
+              <input type="number" step="0.1" name="pdf_size_cap_mb" value="{{ cfg.pdf_size_cap_mb or '' }}" min="0.1">
+            </div>
+            <div>
+              <label class="inline" style="margin-top:30px;"><input type="checkbox" name="auto_export_pdf" value="1" {{ 'checked' if cfg.auto_export_pdf else '' }}> Auto-export PDF (measure)</label>
+            </div>
+            <div class="full2">
+              <label>Data store paths (one per line; read + merged in order)</label>
+              <textarea name="data_store_paths" rows="3">{% for p in cfg.data_store_paths or [] %}{{ p }}
+{% endfor %}</textarea>
+            </div>
+          </div>
+
+          <details class="adv" style="margin-top:14px;">
+            <summary>AI skill classifier (local Ollama) — Section I</summary>
+            <div class="adv-body">
+              <input type="hidden" name="llm_present" value="1">
+              <label class="inline" style="margin-top:8px;"><input type="checkbox" name="llm.enabled" value="1" {{ 'checked' if cfg.llm and cfg.llm.enabled else '' }}> Enable local LLM classification (off = deterministic fallback)</label>
+              <div class="row" style="margin-top:10px;">
+                <div><label>Backend</label><input type="text" name="llm.backend" value="{{ (cfg.llm.backend if cfg.llm else 'ollama') }}"></div>
+                <div style="flex:2;"><label>Model</label><input type="text" name="llm.model" value="{{ (cfg.llm.model if cfg.llm else '') }}"></div>
+              </div>
+              <div class="row">
+                <div style="flex:2;"><label>Host</label><input type="text" name="llm.host" value="{{ (cfg.llm.host if cfg.llm else '') }}"></div>
+                <div><label>Context length</label><input type="number" name="llm.num_ctx" value="{{ (cfg.llm.num_ctx if cfg.llm else '') }}" min="2048"></div>
+              </div>
+              <div class="hint">Requires a running Ollama daemon + a pulled model. See
+                <code class="mono">docs/phase6-requirements-llm.md</code>.</div>
+            </div>
+          </details>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" type="button" onclick="closeSettings()">Cancel</button>
+          <button class="btn btn-primary" type="submit">Save settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
+    // --- workflow tabs (Build submittal / Forms & other documents) ---
+    // A fresh fill or notice-validation result lives in the Forms tab, so open it
+    // there; otherwise honour the URL hash, then the last-used tab, then Build.
+    const SERVER_TAB = {{ ('forms' if (result and result.kind == 'fill') or validation else '')|tojson }};
+    function showTab(name, push) {
+      document.querySelectorAll('.tabpanel').forEach(p => { p.hidden = (p.id !== 'tab-' + name); });
+      document.querySelectorAll('.wtab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      try { localStorage.setItem('ppTab', name); } catch (e) {}
+      if (push !== false) history.replaceState(null, '', '#' + name);
+    }
+    (function initTab() {
+      const h = (location.hash || '').replace('#', '');
+      let t = (h === 'build' || h === 'forms') ? h
+            : (SERVER_TAB || (function(){ try { return localStorage.getItem('ppTab'); } catch (e) { return null; } })() || 'build');
+      showTab(t, false);
+    })();
+
+    // --- keep scroll position across the POST -> redirect -> reload cycle ---
+    // (every add/edit/apply reloads the page; without this it jumps to the top)
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    document.addEventListener('submit', () => {
+      try { sessionStorage.setItem('ppScroll', String(window.scrollY)); } catch (e) {}
+    });
+    (function restoreScroll() {
+      try {
+        const y = sessionStorage.getItem('ppScroll');
+        if (y !== null) { sessionStorage.removeItem('ppScroll'); window.scrollTo(0, parseInt(y, 10) || 0); }
+      } catch (e) {}
+    })();
+
+    // --- settings modal ---
+    function openSettings() { document.getElementById('settingsModal').style.display = 'flex'; }
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+
     // --- add-source panel ---
     function toggleAdd() {
       const p = document.getElementById('addPanel');
@@ -556,6 +805,7 @@
 
     // --- edit-in-place for Section II / III / IV entries ---
     const ENTRY_FIELDS = {
+      categories: ['dit_number', 'name', 'description'],
       personnel: ['name', 'qualifications'],
       pp: ['client', 'project', 'contact', 'phone', 'scope', 'issue_resolution'],
       capacity: ['client', 'project', 'start_year', 'end'],

@@ -24,10 +24,12 @@ import datetime as _dt
 import re
 
 from docx import Document
-from docx.table import Table
+from docx.oxml.ns import qn
+from docx.table import Table, _Cell
 
-from . import docx_map
-from .docx_edit import append_cloned_row, para_text, replace_in_paragraph, set_cell_text
+from . import docx_map, skills
+from .docx_edit import (append_cloned_row, para_text, rebuild_table_body,
+                        replace_in_paragraph, set_cell_lines, set_cell_text)
 from .flags import KIND_ADD, KIND_MISSING, KIND_UNSAFE, Report
 
 
@@ -210,9 +212,106 @@ def apply_store_sync(doc, store: dict, as_of_year: int, report: Report) -> None:
     fields on matched entries are updated in place. Rows/blocks in the document
     that the store doesn't mention are left untouched (delete by hand).
     """
+    _sync_categories(doc, store.get("categories") or [], report)
     _sync_qualifications(doc, store.get("personnel") or [], report)
     _sync_past_performance(doc, store.get("past_performance") or [], report)
     _sync_capacity(doc, store.get("projects") or [], as_of_year, report)
+
+
+# tcPr children that must follow <w:vMerge> in a schema-valid cell.
+_TCPR_AFTER_VMERGE = [qn(f"w:{t}") for t in (
+    "tcBorders", "shd", "noWrap", "tcMar", "textDirection", "tcFitText",
+    "vAlign", "hideMark")]
+
+
+def _set_tc_vmerge(tc, restart: bool) -> None:
+    """Set a <w:tc>'s vertical-merge state: restart (top of span) or continue."""
+    tcPr = tc.get_or_add_tcPr()
+    for old in tcPr.findall(qn("w:vMerge")):
+        tcPr.remove(old)
+    vm = tcPr.makeelement(qn("w:vMerge"), {})
+    if restart:
+        vm.set(qn("w:val"), "restart")
+    anchor = next((c for c in tcPr if c.tag in _TCPR_AFTER_VMERGE), None)
+    (anchor.addprevious if anchor is not None else tcPr.append)(vm)
+
+
+def _vmerge_first_column(tbl, start_row: int, end_row: int, text: str) -> None:
+    """Vertically merge column 0 of table rows [start_row, end_row] into one cell
+    showing ``text`` (rows 0-based; row 0 is the header).
+
+    Works on the raw <w:tc> elements: once a cell is ``vMerge=restart``, python-docx
+    returns the *origin* cell for lower rows' ``cells[0]``, so touching cells via the
+    grid would keep hitting the top cell.
+    """
+    trs = tbl._tbl.tr_lst
+    for offset, ri in enumerate(range(start_row, end_row + 1)):
+        tc = trs[ri].tc_lst[0]
+        set_cell_text(_Cell(tc, tbl), text if offset == 0 else "")
+        _set_tc_vmerge(tc, restart=(offset == 0))
+
+
+def _clear_table_font_color(tbl) -> None:
+    """Drop explicit run colors in a table so text uses the document default.
+
+    Removes leftover red annotation coloring (the firm marks in-progress rows red);
+    a submittal table should be the standard black.
+    """
+    for row in tbl.rows:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    rpr = run._r.find(qn("w:rPr"))
+                    if rpr is not None:
+                        col = rpr.find(qn("w:color"))
+                        if col is not None:
+                            rpr.remove(col)
+
+
+def _sync_categories(doc, categories: list, report: Report) -> None:
+    """Section I: rebuild the Categories table as a clean, FY-standard block.
+
+    Rather than patch rows in place (which let stale letters and red annotation
+    color survive), the table is rebuilt from ``skills.finalize_categories``:
+    letters reconciled against the FY taxonomy, sorted a-x, duplicates combined,
+    column 2 set to the canonical category name, and font color cleared. This is
+    idempotent and independent of accumulated store state.
+    """
+    if not categories:
+        return
+    tables = docx_map.find_table_by_signature(doc, docx_map.SIG_CATEGORIES)
+    if not tables:
+        report.flag("Categories", "Categories (DIT #) table not found; add the store "
+                    "categories manually.", KIND_MISSING)
+        return
+    finalized = skills.finalize_categories(categories)
+    if not finalized:
+        return
+    n = write_finalized_categories(tables[0], finalized)
+    report.applied(
+        "Categories",
+        f"rebuilt Section I from store: uppercase A-X, sorted, canonical names "
+        f"(X keeps per-skill titles), merged catch-all, cleared colors ({n} rows)")
+
+
+def write_finalized_categories(tbl, finalized: list[dict]) -> int:
+    """Rebuild the Categories table from a finalized list (shared by both engines).
+
+    Non-X rows use the canonical FY name; the catch-all X block keeps each
+    specialty's own title/description and shares a single merged "X" cell; all
+    explicit font colors are cleared. Returns the number of rows written.
+    """
+    # rebuild letter + name; the description is set separately so its per-item
+    # line breaks survive (rebuild_table_body collapses to a single run).
+    rows = [[r["dit_number"], r["name"], ""] for r in finalized]
+    n = rebuild_table_body(tbl, rows)
+    for i, r in enumerate(finalized):
+        set_cell_lines(tbl.rows[i + 1].cells[2], r["description"])
+    x_idx = [i for i, r in enumerate(finalized) if r.get("catchall")]
+    if len(x_idx) >= 2:
+        _vmerge_first_column(tbl, x_idx[0] + 1, x_idx[-1] + 1, finalized[x_idx[0]]["dit_number"])
+    _clear_table_font_color(tbl)
+    return n
 
 
 def _sync_capacity(doc, projects: list, as_of_year: int, report: Report) -> None:

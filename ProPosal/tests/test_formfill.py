@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from proposal import formfill, forms  # noqa: E402
 
-DPW120 = ROOT / "assets/refs/DPW-120-fillable.pdf"
-SF330 = ROOT / "assets/refs/Modified-SF330_Qualification_Form.pdf"
+DPW120 = ROOT / "assets/defaults/DPW-120-fillable.pdf"
+SF330 = ROOT / "assets/defaults/Modified-SF330_Qualification_Form.pdf"
 pytestmark = pytest.mark.skipif(not DPW120.exists(), reason="DPW-120 template not available")
 
 STORE = {

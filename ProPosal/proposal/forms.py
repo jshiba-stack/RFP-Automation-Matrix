@@ -34,14 +34,14 @@ FORMS = {
     "DPW-120": FormSpec(
         key="DPW-120",
         name="DPW-120 Statement of Qualifications",
-        default_template="assets/refs/DPW-120-fillable.pdf",
+        default_template="assets/defaults/DPW-120-fillable.pdf",
         field_map=DPW120_MAP,
         notes="Fillable AcroForm (276 fields). Demo map fills a few; extend as needed.",
     ),
     "SF330": FormSpec(
         key="SF330",
         name="Modified Standard Form 330",
-        default_template="assets/refs/Modified-SF330_Qualification_Form.pdf",
+        default_template="assets/defaults/Modified-SF330_Qualification_Form.pdf",
         field_map={},
         notes="The bundled PDF is flat (no form fields). Provide a fillable SF330 template to use this.",
     ),

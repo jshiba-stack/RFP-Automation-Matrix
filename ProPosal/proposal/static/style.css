@@ -54,6 +54,20 @@ body {
 .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
 main.wrap { padding-top: 24px; padding-bottom: 48px; }
 
+/* header right side: settings gear + version */
+.topright { display: flex; align-items: center; gap: 12px; }
+.gearbtn {
+  background: rgba(255,255,255,.18); color: #fff; border: none; border-radius: 8px;
+  padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.gearbtn:hover { background: rgba(255,255,255,.30); }
+
+/* workflow tabs (Build submittal / Forms & other documents) */
+.worktabs { margin: 4px 0 18px; }
+.wtab { font-size: 14px; padding: 10px 20px; }
+.tabpanel[hidden] { display: none; }
+.linklike { background: none; border: none; padding: 0; color: var(--ocean-500); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .card {
   background: var(--white); border: 1px solid var(--line);
@@ -212,6 +226,26 @@ input::placeholder, textarea::placeholder { color: #9bb0c2; }
   cursor: pointer; border-radius: 7px; color: var(--ink); font-family: inherit; }
 .frow:hover { background: var(--sky-100); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
+
+/* settings modal: wider, scrollable body, 2-col field grid */
+.modal.settings { width: min(700px, 94vw); max-height: 88vh; }
+/* the form fills the modal column so the body scrolls and the footer stays put */
+.modal.settings form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.modal.settings .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+.settings-grid .full2 { grid-column: 1 / -1; }
+/* the folder browser must overlay the settings modal when opened from within it */
+#modal.modal-bg { z-index: 60; }
+@media (max-width: 620px) { .settings-grid { grid-template-columns: 1fr; } }
+
+/* Section I classification results: arrow + change highlight + accept */
+table.classify td { vertical-align: middle; }
+table.classify tr.chg td { background: #fff8e8; }
+.arrowcell { text-align: center; padding: 0 2px !important; }
+.arrow { color: var(--ocean-500); font-weight: 800; font-size: 15px; }
+code.mono.newletter { background: #e4f3ea; color: var(--green); font-weight: 700; }
+.acceptcell { white-space: nowrap; text-align: right; }
+.btn.btn-mini { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
 
 .dl { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
 .footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; }

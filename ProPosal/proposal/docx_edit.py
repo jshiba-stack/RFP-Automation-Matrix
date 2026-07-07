@@ -187,6 +187,36 @@ def set_cell_text(cell: _Cell, text: str) -> None:
         para.add_run(text)
 
 
+def _set_para_run_text(para: Paragraph, text: str) -> None:
+    """Put ``text`` in a paragraph's first run, clearing any others."""
+    if para.runs:
+        para.runs[0].text = text
+        for r in para.runs[1:]:
+            r.text = ""
+    else:
+        para.add_run(text)
+
+
+def set_cell_lines(cell: _Cell, text: str) -> None:
+    """Set a cell's text, rendering each ``\\n`` as its own paragraph.
+
+    Matches how multi-item cells are authored in the submittal (one item per
+    line). The first paragraph's formatting is cloned for every added line.
+    """
+    lines = ("" if text is None else str(text)).split("\n")
+    para0 = cell.paragraphs[0]
+    for extra in cell.paragraphs[1:]:
+        extra._element.getparent().remove(extra._element)
+    model = copy.deepcopy(para0._p)          # capture formatting before edit
+    _set_para_run_text(para0, lines[0] if lines else "")
+    anchor = para0._p
+    for line in lines[1:]:
+        new_p = copy.deepcopy(model)
+        anchor.addnext(new_p)
+        anchor = new_p
+        _set_para_run_text(Paragraph(new_p, para0._parent), line)
+
+
 def append_cloned_row(table: Table, values: list[str], *, model_row: int = -1):
     """Append one data row, cloning an existing row's formatting/borders.
 

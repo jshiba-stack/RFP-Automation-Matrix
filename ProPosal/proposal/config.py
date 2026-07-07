@@ -38,12 +38,23 @@ DEFAULT_CONFIG = {
     "resumes_dir": "",
     "default_department": "DIT",
     # Annual notice PDF, for the optional notice-validation pass (Phase 5).
-    "notice_pdf_path": "assets/refs/Professional-Services-Annual-Ad-Fiscal-Year-2026.pdf",
+    # Mandatory reference docs live in assets/defaults/ (see its README).
+    "notice_pdf_path": "assets/defaults/Professional-Services-Annual-Ad-Fiscal-Year-2027.pdf",
     # Compliance caps (City & County FY26: 3.0 MB per attachment).
     "pdf_size_cap_mb": 3.0,
     "page_limit": 30,
     # Optional: auto-export docx -> pdf via Word (Windows only) just to MEASURE.
     "auto_export_pdf": False,
+    # Local LLM backend for the Section I skill classifier (and future AI checks).
+    # Disabled by default: the classifier falls back to deterministic matching, so
+    # nothing requires Ollama unless you turn it on. See docs/phase6-requirements-llm.md.
+    "llm": {
+        "enabled": False,
+        "backend": "ollama",
+        "model": "qwen2.5:14b-instruct",
+        "host": "http://localhost:11434",
+        "num_ctx": 16384,
+    },
 }
 
 DEFAULT_STATE = {

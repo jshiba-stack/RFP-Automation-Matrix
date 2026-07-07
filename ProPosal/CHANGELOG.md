@@ -4,6 +4,73 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] — 2026-07-07
+
+Section I (professional service categories) becomes a managed, self-standardizing
+section: it is extracted, edited, and **classified against the current-year DIT
+taxonomy**, then rebuilt to the house standard at build. The dashboard is split
+into tabs with a settings modal, and a document-wide table formatting standard is
+enforced on every build.
+
+### Added
+- **Section I skill classifier** (`proposal/skills.py`). Reconciles each category
+  against the current-year DIT taxonomy: an exact category-name match auto-applies
+  the correct letter (self-heals letters that drift year to year); anything it can
+  only guess at, or that was dropped from the notice, or that appears twice is
+  **flag-only** for review (never silently applied). Duplicate skills that resolve
+  to the same letter are flagged with a merge suggestion.
+- **DIT taxonomy parser** (`proposal/dit_taxonomy.py`). Parses the annual notice
+  PDF's lettered `A.`–`X.` DIT list with `pdfplumber` and caches it to
+  `assets/defaults/dit_taxonomy_fy2027.yaml` (24 categories) — the classification
+  target and the source of truth for correcting stale letters.
+- **Local-LLM backend package** (`proposal/llm/`, base + Ollama over stdlib
+  `urllib`, pluggable). Off by default; when enabled it upgrades the classifier's
+  fuzzy suggestions with real reasoning, otherwise a deterministic keyword scorer
+  runs — so nothing requires a model to be installed.
+- **Section I content manager** — a collapsed card to add/edit/reorder categories,
+  a **Classify** button, per-row **Accept** and **Accept all** for suggested
+  changes (shown as an old → new arrow), and per-skill rationale.
+- **Dashboard tabs** — the single long page is split into **Build submittal** and
+  **Forms & other documents**; the active tab survives reloads.
+- **Settings / defaults modal** — a gear button edits machine-local defaults
+  (base/template/notice paths, resumes + output folders, page limit, size cap,
+  data-store paths, LLM settings), saved to `instance/config.json`.
+- **Mandatory-documents folder** (`assets/defaults/`) for the standing reference
+  docs (annual notices, form templates); config/form defaults point at it, and
+  the default notice is now FY2027.
+
+### Changed
+- **Section I is rebuilt to a house standard at build** (`skills.finalize_categories`
+  + `updater.write_finalized_categories`, with generator parity): letters
+  reconciled and **uppercased A–X**, rows sorted, duplicate letters combined
+  (with item-level de-duplication of the descriptions), column 2 set to the
+  canonical category name, description line breaks preserved (one item per line),
+  and colours cleared. The **catch-all "X" is the exception** — its specialties
+  keep their own titles/descriptions under a single vertically-merged "X" cell.
+- **Table formatting standard** (`proposal/proofread.py`, rewritten). On every
+  build, across every table: font size auto-fixed to **12pt**, text colour
+  auto-cleared to **black**, and border deviations from **0.5pt single** flagged
+  for review — except **Section III past-performance tables**, which get full
+  0.5pt cell borders auto-applied (a section-specific standard).
+- Import now also extracts Section I categories; the classification cache resets
+  on each fresh import (a clean slate per proposal).
+
+### Fixed
+- **Category id collision.** Ids were derived from the DIT # (`?` slugged to
+  nothing → every unlettered row became `cat-item`), so edit/accept-by-id hit the
+  wrong row and state scrambled across sessions. Ids are now keyed off the
+  (unique) category name. Because the build derives the clean table from the
+  taxonomy, accumulated stale letters can no longer corrupt the output.
+- **Page jumped to the top on every add/edit/apply.** Scroll position is now
+  preserved across the POST → reload cycle.
+- **Accept overwrote the "before" value**, so an applied row read new → new;
+  it now keeps the original so the old → new arrow persists.
+- **Descriptions were smashed onto one line.** Extraction flattened the cell's
+  per-item line breaks; the whole chain now preserves them and renders each item
+  on its own line.
+- **Merging two rows onto one letter duplicated technologies** (e.g. Flutter,
+  Angular listed twice) — combined descriptions are now de-duplicated item by item.
+
 ## [0.13.0] — 2026-07-04
 
 Two proofreading gaps closed: you can name the deliverable, and the build now

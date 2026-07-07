@@ -15,11 +15,13 @@ from pathlib import Path
 from flask import (Flask, flash, jsonify, redirect, render_template, request,
                    send_from_directory, url_for)
 
-from . import (__version__, config, discovery, forms, jobs, notice, resumes,
-               storewrite)
+from . import (__version__, config, discovery, forms, jobs, llm, notice,
+               resumes, skills, storewrite)
+from .flags import Report
 
 # dashboard entry kinds -> store list keys
 ENTRY_KEYS = {
+    "categories": "categories",
     "personnel": "personnel",
     "pp": "past_performance",
     "capacity": "projects",
@@ -32,6 +34,7 @@ _lock = threading.Lock()
 _status = {"running": False, "kind": None, "message": "", "ok": True}
 _last_result: dict | None = None
 _last_validation: dict | None = None
+_last_classification: dict | None = None
 
 
 def _set(running, kind, message, ok=True):
@@ -137,10 +140,12 @@ def index():
     return render_template(
         "dashboard.html",
         version=__version__,
+        cfg=cfg,
         state=state,
         action=action,
         result=_last_result,
         validation=_last_validation,
+        classification=_last_classification,
         sources=sources,
         active=active,
         workspace=str(workspace) if workspace else "",
@@ -268,6 +273,16 @@ class _FormError(ValueError):
 
 def _entry_record(kind: str, f) -> dict:
     """Build (and validate) the store record for one dashboard entry form."""
+    if kind == "categories":
+        name = f.get("name", "").strip()
+        if not name:
+            raise _FormError("Professional Service Category (name) is required.")
+        record = {"dit_number": f.get("dit_number", "").strip(), "name": name}
+        desc = f.get("description", "").strip()
+        if desc:
+            record["description"] = desc
+        return record
+
     if kind == "personnel":
         name = f.get("name", "").strip()
         if not name:
@@ -305,8 +320,9 @@ def _entry_record(kind: str, f) -> dict:
     return record
 
 
-_ENTRY_LABEL = {"personnel": "Section II entry", "pp": "Section III entry",
-                "capacity": "Section IV row"}
+_ENTRY_LABEL = {"categories": "Section I category", "personnel": "Section II entry",
+                "pp": "Section III entry", "capacity": "Section IV row"}
+_ID_PREFIX = {"pp": "pp", "categories": "cat"}
 
 
 @app.route("/add-entry", methods=["POST"])
@@ -341,7 +357,7 @@ def add_entry():
         if not store_path:
             raise _FormError("Pick a data store to save into.")
         rid = storewrite.append_record(
-            store_path, key, record, id_prefix="pp" if kind == "pp" else "")
+            store_path, key, record, id_prefix=_ID_PREFIX.get(kind, ""))
         flash(f"{label} committed to {os.path.basename(store_path)} (id: {rid}).",
               "success")
     except _FormError as exc:
@@ -390,6 +406,8 @@ def import_doc():
 
     import yaml
 
+    global _last_classification
+
     docx_path = request.form.get("docx", "").strip()
     if not docx_path or not Path(docx_path).exists():
         flash(f"Pick a document to import from (not found: {docx_path or '(empty)'}).", "error")
@@ -402,7 +420,7 @@ def import_doc():
         from .tools.extract_store import extract
         data = extract(docx_path)
         subset = {k: [dict(r) for r in data.get(k, [])]
-                  for k in ("personnel", "past_performance", "projects")}
+                  for k in ("categories", "personnel", "past_performance", "projects")}
         target = Path(ws) / "store_imported.yaml"
         header = (
             f"# Imported by ProPosal from '{Path(docx_path).name}' on "
@@ -412,11 +430,183 @@ def import_doc():
         )
         body = yaml.safe_dump(subset, sort_keys=False, allow_unicode=True, width=100)
         storewrite._atomic_write(target, header + body)
-        flash(f"Imported {len(subset['personnel'])} personnel, "
+        _last_classification = None   # fresh import = clean slate; drop stale results
+        flash(f"Imported {len(subset['categories'])} Section I categor(y/ies), "
+              f"{len(subset['personnel'])} personnel, "
               f"{len(subset['past_performance'])} past-performance block(s), and "
               f"{len(subset['projects'])} project row(s) into {target.name}.", "success")
     except Exception as exc:  # noqa: BLE001
         flash(f"Import failed: {exc}", "error")
+    return redirect(url_for("index"))
+
+
+@app.route("/settings", methods=["POST"])
+def settings():
+    """Save machine-local defaults from the Settings modal to instance/config.json."""
+    cfg = config.load_config()
+    f = request.form
+    for key in ("base_docx_path", "template_docx_path", "notice_pdf_path",
+                "output_dir", "resumes_dir", "default_department"):
+        if key in f:
+            cfg[key] = f.get(key, "").strip().strip('"')
+    cap = f.get("pdf_size_cap_mb", "").strip()
+    if cap:
+        try:
+            cfg["pdf_size_cap_mb"] = float(cap)
+        except ValueError:
+            flash(f"PDF size cap must be a number: {cap}", "error")
+    pl = f.get("page_limit", "").strip()
+    if pl:
+        try:
+            cfg["page_limit"] = int(pl)
+        except ValueError:
+            flash(f"Page limit must be a whole number: {pl}", "error")
+    cfg["auto_export_pdf"] = bool(f.get("auto_export_pdf"))
+    # LLM (Section I classifier) settings — the block may not exist on older configs.
+    llm = dict(cfg.get("llm") or {})
+    if "llm.enabled" in f or "llm_present" in f:
+        llm["enabled"] = bool(f.get("llm.enabled"))
+    for lk in ("backend", "model", "host"):
+        if f"llm.{lk}" in f:
+            llm[lk] = f.get(f"llm.{lk}", "").strip()
+    nc = f.get("llm.num_ctx", "").strip()
+    if nc:
+        try:
+            llm["num_ctx"] = int(nc)
+        except ValueError:
+            flash(f"LLM context length must be a whole number: {nc}", "error")
+    if llm:
+        cfg["llm"] = llm
+    # Data store paths: one per line (blank = keep existing).
+    dsp = f.get("data_store_paths", "")
+    paths = [ln.strip() for ln in dsp.replace(",", "\n").splitlines() if ln.strip()]
+    if paths:
+        cfg["data_store_paths"] = paths
+    config.save_config(cfg)
+    flash("Settings saved.", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/classify", methods=["POST"])
+def classify():
+    """Classify Section I skills against the current DIT taxonomy.
+
+    Auto-applies (and persists) exact-match letter corrections; everything
+    uncertain or duplicated is flagged for the human. Uses the local LLM when
+    enabled, else deterministic keyword matching.
+    """
+    global _last_classification
+    cfg = config.load_config()
+    workspace = config.active_workspace_path(cfg)
+    found = (discovery.scan_folder(workspace) if workspace
+             else {"docx": [], "stores": [], "error": None})
+    cats = _collect_entries(found["stores"])["categories"]
+    if not cats:
+        flash("No Section I categories to classify — import a submittal or add some first.", "error")
+        return redirect(url_for("index"))
+
+    backend = None
+    try:
+        backend = llm.get_backend(cfg)
+        if backend is not None and not backend.available():
+            flash("LLM enabled but the Ollama daemon isn't reachable — using keyword matching.", "info")
+            backend = None
+    except Exception as exc:  # noqa: BLE001
+        flash(f"LLM backend error ({exc}); using keyword matching.", "info")
+        backend = None
+
+    report = Report()
+    try:
+        out = skills.classify_categories(cats, backend=backend, report=report, log=_noop)
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Classification failed: {exc}", "error")
+        return redirect(url_for("index"))
+
+    persisted = 0
+    for r in out["results"]:
+        if not r["applied"]:
+            continue
+        cat = next((c for c in cats if c.get("id") == r["id"]), None)
+        if cat and cat.get("_store"):
+            try:
+                storewrite.update_record(cat["_store"], "categories", cat["id"],
+                                         {"dit_number": cat["dit_number"]})
+                persisted += 1
+            except Exception as exc:  # noqa: BLE001
+                flash(f"Could not save '{cat.get('name', cat['id'])}': {exc}", "error")
+
+    _last_classification = {
+        "results": out["results"],
+        "duplicates": out["duplicates"],
+        "used_llm": out["used_llm"],
+        "applied": out["applied"],
+        "flag_count": len(report.flags),
+    }
+    engine = "local LLM" if out["used_llm"] else "keyword matching"
+    flash(f"Classified {len(cats)} skill(s) via {engine}: {persisted} DIT # corrected, "
+          f"{len(out['duplicates'])} possible duplicate group(s), "
+          f"{len(report.flags)} flag(s) to review.", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/classify/accept", methods=["POST"])
+def classify_accept():
+    """Apply one flagged classification suggestion: set a category's DIT # letter."""
+    global _last_classification
+    f = request.form
+    cid = f.get("id", "").strip()
+    letter = f.get("letter", "").strip()
+    cfg = config.load_config()
+    workspace = config.active_workspace_path(cfg)
+    found = (discovery.scan_folder(workspace) if workspace
+             else {"docx": [], "stores": [], "error": None})
+    cats = _collect_entries(found["stores"])["categories"]
+    cat = next((c for c in cats if str(c.get("id")) == cid), None)
+    if not cat or not cat.get("_store"):
+        flash("Could not find that category to update (re-run Classify?).", "error")
+        return redirect(url_for("index"))
+    try:
+        storewrite.update_record(cat["_store"], "categories", cid, {"dit_number": letter})
+        # mark applied but KEEP the original "current" so the row still reads
+        # old -> new (the arrow) instead of new -> new after the reload
+        if _last_classification:
+            for r in _last_classification["results"]:
+                if str(r["id"]) == cid:
+                    r["applied"] = True
+        flash(f"Set DIT # for '{cat.get('name', cid)}' to '{letter}'.", "success")
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Could not update category: {exc}", "error")
+    return redirect(url_for("index"))
+
+
+@app.route("/classify/accept-all", methods=["POST"])
+def classify_accept_all():
+    """Apply every pending (not-yet-applied) classification suggestion at once."""
+    global _last_classification
+    if not _last_classification:
+        flash("Nothing to accept — run Classify first.", "error")
+        return redirect(url_for("index"))
+    cfg = config.load_config()
+    workspace = config.active_workspace_path(cfg)
+    found = (discovery.scan_folder(workspace) if workspace
+             else {"docx": [], "stores": [], "error": None})
+    by_id = {str(c.get("id")): c for c in _collect_entries(found["stores"])["categories"]}
+    applied = 0
+    for r in _last_classification["results"]:
+        if r["applied"] or not (r["suggested"] and r["suggested"] != r["current"]):
+            continue
+        cat = by_id.get(str(r["id"]))
+        if not cat or not cat.get("_store"):
+            continue
+        try:
+            storewrite.update_record(cat["_store"], "categories", str(r["id"]),
+                                     {"dit_number": r["suggested"]})
+            r["applied"] = True   # keep original "current" for the old -> new arrow
+            applied += 1
+        except Exception as exc:  # noqa: BLE001
+            flash(f"Could not update '{cat.get('name', r['id'])}': {exc}", "error")
+    flash(f"Accepted {applied} suggested change(s)." if applied
+          else "No pending suggestions to accept.", "success" if applied else "info")
     return redirect(url_for("index"))
 
 

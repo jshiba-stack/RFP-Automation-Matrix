@@ -6,3 +6,7 @@ Flask>=3.0.0
 # Windows + Word; exports the body PDF and converts .docx resumes during
 # submittal assembly (the deliverable = body PDF + resume PDF pages).
 docx2pdf>=0.1.8
+# Optional, no pip package required: the Section I skill classifier can use a local
+# Ollama daemon (proposal/llm/ talks to it over stdlib urllib). Install Ollama from
+# ollama.com and `ollama pull qwen2.5:14b-instruct`, then enable it in Settings.
+# Disabled by default — the classifier falls back to deterministic matching.

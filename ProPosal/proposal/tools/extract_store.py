@@ -60,16 +60,27 @@ def extract(path: str) -> OrderedDict:
         selected_categories=[],
     )
 
-    # Categories (DIT # / Category / Description)
+    # Categories (DIT # / Category / Description). Id is keyed off the category
+    # NAME (stable + unique), not the DIT # -- a "?" or blank DIT # slugs to
+    # nothing and would collide (every unlettered row -> "cat-item").
     cats = []
+    used_ids: set[str] = set()
     for t in docx_map.find_table_by_signature(doc, docx_map.SIG_CATEGORIES):
         for row in t.rows[1:]:
             c = [cell.text.strip().replace("\n", " ") for cell in row.cells]
             if not any(c):
                 continue
             num = c[0]
-            cats.append(OrderedDict(id=f"cat-{_slug(num or c[1])}", dit_number=num,
-                                    name=c[1], description=c[2] if len(c) > 2 else ""))
+            # keep the description's line structure (each tech on its own line);
+            # only the DIT # / name are flattened
+            desc = row.cells[2].text.strip() if len(row.cells) > 2 else ""
+            base = f"cat-{_slug(c[1] or num)}"
+            cid, k = base, 2
+            while cid in used_ids:
+                cid, k = f"{base}-{k}", k + 1
+            used_ids.add(cid)
+            cats.append(OrderedDict(id=cid, dit_number=num,
+                                    name=c[1], description=desc))
     store["categories"] = cats
     store["opportunity"]["selected_categories"] = [c["dit_number"] for c in cats if c["dit_number"]]
 

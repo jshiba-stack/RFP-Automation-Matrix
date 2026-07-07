@@ -55,6 +55,22 @@ def test_generate_rebuilds_capacity_from_store(store):
     assert "Fiscal Year 2027" in joined and "March 2, 2026" in joined
 
 
+def test_generate_rebuilds_categories(store):
+    from docx.table import _Cell
+    doc, _ = generator.generate(BASE, store, target_fy=2027)
+    cats = docx_map.find_table_by_signature(doc, docx_map.SIG_CATEGORIES)[0]
+
+    # read col 0 from the raw <w:tc> (python-docx returns the merge-origin cell for
+    # X-block continuation rows, which would falsely repeat "X")
+    def col0(row):
+        return _Cell(row._tr.tc_lst[0], cats).text.strip()
+
+    letters = [col0(r) for r in cats.rows[1:] if col0(r)]   # blanks = merged X continuations
+    assert letters == sorted(letters), "Section I should be sorted A-X"
+    assert len(letters) == len(set(letters)), "each letter appears once (X merged)"
+    assert all(ltr.isupper() for ltr in letters), "letters are uppercase per FY notice"
+
+
 def test_generate_rebuilds_qualifications(store):
     doc, _ = generator.generate(BASE, store, target_fy=2027)
     q = docx_map.find_table_by_signature(doc, docx_map.SIG_QUALIFICATIONS)[0]

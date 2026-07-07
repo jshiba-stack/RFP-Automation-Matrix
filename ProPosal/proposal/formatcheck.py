@@ -80,17 +80,18 @@ def check_format(doc_or_path, template_or_path=None) -> ChecklistReport:
         else:
             rep.pass_("No foreign styles", "all paragraph styles exist in the template")
 
-    # table consistency (the proofread pass normalizes these on build; here we
-    # just report the current state, so a standalone check still surfaces them)
+    # table house standard (the build-time proofread pass auto-fixes font size +
+    # color and flags border deviations; here we report current state either way).
     font_bad = proofread.font_outliers(doc)
     if font_bad:
-        rep.warn("Table font size uniform", f"mixed sizes in: {', '.join(font_bad)}")
+        rep.warn("Table font size", f"not {proofread.TABLE_FONT_PT:g}pt in: {', '.join(font_bad)}")
     else:
-        rep.pass_("Table font size uniform", "each table's rows share one font size")
+        rep.pass_("Table font size", f"every table cell renders at {proofread.TABLE_FONT_PT:g}pt")
     border_bad = proofread.border_outliers(doc)
     if border_bad:
-        rep.warn("Table borders consistent", f"missing interior border in: {', '.join(border_bad)}")
+        rep.warn("Table borders",
+                 f"not {proofread.BORDER_PT:g}pt single on all edges in: {', '.join(border_bad)}")
     else:
-        rep.pass_("Table borders consistent", "sibling tables share interior borders")
+        rep.pass_("Table borders", f"every table has {proofread.BORDER_PT:g}pt single borders")
 
     return rep

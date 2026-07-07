@@ -138,7 +138,8 @@ def append_record(path, key: str, record: dict, *, id_prefix: str = "") -> str:
         raise ValueError(f"Not a YAML/JSON data store: {path.name}")
 
     if not record.get("id"):
-        base = slugify(id_prefix, str(record.get("client", "")), str(record.get("project", "")))
+        base = slugify(id_prefix, str(record.get("client", "")),
+                       str(record.get("project", "")), str(record.get("name", "")))
         record = {"id": unique_id(base, existing_ids(path, key)), **record}
     rid = str(record["id"])
 
