@@ -61,7 +61,6 @@ def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log) -> str 
         return None
 
     parts: list[Path] = [Path(body_pdf)]
-    pages = 0
     tmpdir: Path | None = None
     if resumes_dir and Path(resumes_dir).is_dir():
         res = resumes.cross_check(personnel, resumes_dir)

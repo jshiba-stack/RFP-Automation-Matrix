@@ -552,7 +552,6 @@ def classify():
 @app.route("/classify/accept", methods=["POST"])
 def classify_accept():
     """Apply one flagged classification suggestion: set a category's DIT # letter."""
-    global _last_classification
     f = request.form
     cid = f.get("id", "").strip()
     letter = f.get("letter", "").strip()
@@ -582,7 +581,6 @@ def classify_accept():
 @app.route("/classify/accept-all", methods=["POST"])
 def classify_accept_all():
     """Apply every pending (not-yet-applied) classification suggestion at once."""
-    global _last_classification
     if not _last_classification:
         flash("Nothing to accept — run Classify first.", "error")
         return redirect(url_for("index"))
@@ -607,20 +605,6 @@ def classify_accept_all():
             flash(f"Could not update '{cat.get('name', r['id'])}': {exc}", "error")
     flash(f"Accepted {applied} suggested change(s)." if applied
           else "No pending suggestions to accept.", "success" if applied else "info")
-    return redirect(url_for("index"))
-
-
-@app.route("/resumes-dir", methods=["POST"])
-def resumes_dir():
-    """Save the resumes folder; the page then shows the cross-reference."""
-    path = request.form.get("resumes_dir", "").strip().strip('"')
-    if path and not Path(path).is_dir():
-        flash(f"Not a folder: {path}", "error")
-        return redirect(url_for("index"))
-    cfg = config.load_config()
-    cfg["resumes_dir"] = path
-    config.save_config(cfg)
-    flash("Resumes folder saved." if path else "Resumes folder cleared.", "success")
     return redirect(url_for("index"))
 
 

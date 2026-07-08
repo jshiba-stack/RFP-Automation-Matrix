@@ -7,13 +7,11 @@ Patterns lifted verbatim from the Phase-0 probe of the submittals:
   footer       -> 'Acme - FY26 Professional Services Submittal' + tab + PAGE field
 """
 
-import re
 import sys
 from pathlib import Path
 
 import pytest
 from docx import Document
-from docx.oxml.ns import qn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from proposal import docx_edit  # noqa: E402
@@ -74,8 +72,8 @@ def test_only_touched_runs_change_field_preserved():
     """
     doc = Document()
     p = doc.add_paragraph()
-    r1 = p.add_run("Acme - FY26 Professional Services Submittal\t")
-    r2 = p.add_run("Page ")
+    p.add_run("Acme - FY26 Professional Services Submittal\t")
+    p.add_run("Page ")
     field_run = p.add_run("9")  # stand-in for the PAGE field result run
     field_el = field_run._element
     res = docx_edit.replace_in_paragraph(p, r"FY2\d", "FY27")

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from docx.document import Document as _Doc
 from docx.oxml.ns import qn

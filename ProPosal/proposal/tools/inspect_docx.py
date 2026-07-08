@@ -62,7 +62,6 @@ def main() -> int:
         return 2
     path = sys.argv[1]
     show_runs = "--runs" in sys.argv
-    show_tables = "--tables" in sys.argv or not show_runs
 
     doc: _Doc = Document(path)
     print(f"### {path}")

@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from proposal import notice  # noqa: E402
-from proposal.checks import FAIL, PASS, WARN  # noqa: E402
+from proposal.checks import FAIL, PASS  # noqa: E402
 
 AD = ROOT / "assets/defaults/Professional-Services-Annual-Ad-Fiscal-Year-2026.pdf"
 pytestmark = pytest.mark.skipif(not AD.exists(), reason="annual notice PDF not available")

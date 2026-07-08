@@ -47,7 +47,6 @@ def test_add_resume_flags_populates_report(tmp_path):
     report = Report()
     store = {"personnel": [{"name": "Jordan Avery"}, {"name": "Gone Away"}]}
     resumes.add_resume_flags(report, store, tmp_path)
-    kinds = {(f.kind, f.summary[:18]) for f in report.flags}
     assert any(k == "REVIEW" and "No resume" in s for k, s in
                {(f.kind, f.summary) for f in report.flags})
     assert any("newhire.docx" in f.new for f in report.flags)
