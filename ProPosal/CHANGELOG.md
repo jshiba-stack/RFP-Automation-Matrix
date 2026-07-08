@@ -4,6 +4,67 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.15.0] — 2026-07-08
+
+Resume pages become standardized deliverables: damaged PDFs are detected and
+automatically re-typeset onto a house template, and a document-wide
+**letterhead standard** (one identical firm block on every page) is enforced
+at build. Root cause of the long-standing "stretched resume" mystery: source
+PDFs re-saved by a desktop PDF editor (re-written text layer — glyphs drawn up
+to 33% taller than designed, fonts left un-embedded); the assembly merge was
+never at fault.
+
+### Added
+- **Resume typography lint** (`pdfutil.resume_pdf_issues` /
+  `pdfutil.pdf_editor_rewrite`). Every resume PDF merged into the submittal is
+  checked for: re-save by a PDF editor (Creator ≠ Word while Producer = Word),
+  non-uniformly scaled text (>5% x/y deviation on ≥5 runs, measured from the
+  content-stream matrices), non-embedded non-base-14 fonts, and off-Letter
+  page size. Each issue raises a per-person REVIEW flag — a distorted source
+  can't silently ship. pypdf-only, no new dependencies.
+- **Typography-aware resume picking** (`resumes._pick_resume`). Freshness
+  stays primary, but when the newest one-page pick is an editor-re-saved PDF,
+  a clean *same-generation* sibling (clean PDF, or a `.docx` Word converts
+  cleanly, ≤ ~30 days older) replaces it. An older clean copy never beats
+  newer content.
+- **Auto-rebuild of damaged resumes** (`proposal/resume_rebuild.py`). When the
+  house resume template is configured and a damaged PDF has no clean sibling,
+  the build re-typesets it: text extracted with layout metadata (pypdf visitor
+  married to plain extraction to restore word spacing), parsed into
+  name/sections/job entries/bullets, rendered onto the template (Title /
+  Heading 1–3 / List styles; header and footer come from the template),
+  Word-exported, and gated by a lost-words check — on any loss the original
+  merges instead. Accepted rebuilds merge with a REVIEW proofread flag and a
+  "(REBUILT)" footer tag; results are cached under `<output>/resumes_rebuilt/`.
+- **"Present" employment rule**. During a rebuild, the current employer's
+  entry (matched against the data store's firm names) gets its end year
+  normalized to "Present"; every change is reported as an applied note.
+- **Letterhead standard, document-wide.** The proofread pass normalizes every
+  letterhead-looking page-header line in the draft to **black, 9pt,
+  right-aligned**, with its textbox pinned to the right *margin* (block right
+  edge = body text right edge; 9pt per typography convention — contact blocks
+  sit below body size). At assembly, the body PDF's letterhead is measured
+  (`pdfutil.letterhead_spec`) and re-set via Word as a position-calibrated
+  stamp; **every resume page gets its old header block whited out and the
+  stamp merged on top**, shifted per page by the measured logo offset
+  (`pdfutil.logo_top`) so the block sits relative to the logo exactly as the
+  body's does. Safety: a resume whose header zone contains non-letterhead text
+  is left untouched and flagged REVIEW.
+- **Config/UI**: `resume_template_docx_path` setting (settings modal; empty =
+  rebuild feature off). Resume-folder scanner now skips `_`-prefixed files so
+  the house template can live alongside the resumes.
+- Tests: 21 new (typography lint, picker swaps, rebuild parse/render/verify,
+  letterhead spec/stamp/logo detection) — suite at 118, fictional data only.
+
+### Fixed
+- Assembly no longer merges visually distorted resume pages unnoticed (the
+  original user-visible bug: one person's resume rendered vertically
+  stretched; two others carried substituted fonts).
+- Letterhead drift across the deliverable (two sizes, three address spellings,
+  five positions, one blue firm name) — every page now renders one identical
+  block, verified by measurement on a real build (right edge 540.0pt on all
+  pages; baseline 13pt below the logo top on body and resume pages alike).
+
 ## [0.14.0] — 2026-07-07
 
 Section I (professional service categories) becomes a managed, self-standardizing

@@ -10,8 +10,10 @@ It never edits anything; it only reports.
 When several files match one person (folders often hold long + one-page
 versions, old drafts, per-client copies), the pick is heuristic: the **newest
 one-page** file, falling back to the **newest overall** when no one-pager
-exists (that fallback is flagged for review). Non-chosen matches are reported
-as ``alternates`` -- superseded copies, not "new hire?" orphans.
+exists (that fallback is flagged for review). A newest PDF that a desktop PDF
+editor re-saved (mangled typography) yields to a clean same-generation
+sibling. Non-chosen matches are reported as ``alternates`` -- superseded
+copies, not "new hire?" orphans.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import re
 import zipfile
 from pathlib import Path
 
+from . import pdfutil
 from .flags import KIND_ADD, KIND_REVIEW, Report
 
 RESUME_EXTS = {".docx", ".pdf", ".doc"}
@@ -33,7 +36,8 @@ def scan_resumes(resumes_dir) -> list[Path]:
     """Every resume file under the folder, recursively.
 
     Folders are commonly organized one subfolder per person, so subfolders are
-    scanned too (hidden/temp entries skipped).
+    scanned too. Hidden/temp entries are skipped, as is anything starting
+    with "_" (the house resume template and other non-person files).
     """
     d = Path(resumes_dir)
     if not d.is_dir():
@@ -43,7 +47,7 @@ def scan_resumes(resumes_dir) -> list[Path]:
         if not p.is_file() or p.suffix.lower() not in RESUME_EXTS:
             continue
         rel_parts = p.relative_to(d).parts
-        if any(part.startswith((".", "~$")) for part in rel_parts):
+        if any(part.startswith((".", "~$", "_")) for part in rel_parts):
             continue
         out.append(p)
     return sorted(out)
@@ -109,8 +113,13 @@ def _pick_resume(candidates: list[Path]) -> tuple[Path, str]:
     The submittal is assembled at the PDF level (each resume page in the real
     deliverable is the person's own PDF export), so preference order is:
     newest one-page **.pdf**, then newest one-page .docx (convertible via
-    Word), then any newest one-pager, then newest overall. Returns
-    ``(path, note)``; the note explains a non-obvious pick ("" if unambiguous).
+    Word), then any newest one-pager, then newest overall. When the winner is
+    a PDF that a desktop PDF editor re-saved (mangled typography -- see
+    :func:`pdfutil.pdf_editor_rewrite`), a clean same-generation sibling (a
+    straight Word export or a .docx no more than ~a month older) replaces it;
+    an OLDER clean copy never does, because content freshness beats
+    typography. Returns ``(path, note)``; the note explains a non-obvious
+    pick ("" if unambiguous).
     """
     if len(candidates) == 1:
         return candidates[0], ""
@@ -126,6 +135,19 @@ def _pick_resume(candidates: list[Path]) -> tuple[Path, str]:
     else:
         pool, kind = candidates, "newest"
     best = max(pool, key=_mtime)
+    editor = (pdfutil.pdf_editor_rewrite(best)
+              if best.suffix.lower() == ".pdf" else None)
+    if editor:
+        cutoff = _mtime(best) - 30 * 86400
+        clean = [p for p in one_page
+                 if p != best and _mtime(p) >= cutoff
+                 and (p.suffix.lower() == ".docx"
+                      or (p.suffix.lower() == ".pdf"
+                          and not pdfutil.pdf_editor_rewrite(p)))]
+        if clean:
+            best = max(clean, key=lambda p: (p.suffix.lower() == ".pdf", _mtime(p)))
+            kind = (f"clean 1-page {best.suffix.lower()} (the newest .pdf was "
+                    f"re-saved with {editor})")
     return best, f"{kind} of {len(candidates)} matching files"
 
 

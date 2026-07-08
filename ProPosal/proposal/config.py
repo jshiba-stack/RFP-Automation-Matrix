@@ -36,6 +36,10 @@ DEFAULT_CONFIG = {
     # Folder of per-person resume files (often synced from OneDrive/SharePoint).
     # Used to cross-verify personnel and to append resumes in generate mode.
     "resumes_dir": "",
+    # House resume template (.docx). When set, a resume PDF that fails the
+    # typography lint at assembly is re-typeset onto this template (rebuild
+    # is cached under the output dir and flagged REVIEW for proofreading).
+    "resume_template_docx_path": "",
     "default_department": "DIT",
     # Annual notice PDF, for the optional notice-validation pass (Phase 5).
     # Mandatory reference docs live in assets/defaults/ (see its README).
@@ -141,6 +145,11 @@ def data_store_abspaths(cfg: dict) -> list[Path]:
 
 def resumes_dir_abspath(cfg: dict) -> Path | None:
     val = (cfg.get("resumes_dir") or "").strip()
+    return _abspath(val) if val else None
+
+
+def resume_template_abspath(cfg: dict) -> Path | None:
+    val = (cfg.get("resume_template_docx_path") or "").strip()
     return _abspath(val) if val else None
 
 

@@ -1,4 +1,4 @@
-"""Table formatting-standard pass (the submittal house style).
+"""Formatting-standard pass (the submittal house style): tables + letterhead.
 
 Runs after the build/generate engines and before save. Enforces the firm's
 table standard across **every table** in the document:
@@ -11,6 +11,10 @@ table standard across **every table** in the document:
   structural and easy to get wrong automatically, so deviations are raised as a
   REVIEW flag for a human rather than rewritten.
 
+Page-header **letterhead** lines (firm name/address/site) are also normalized:
+black, ``LETTERHEAD_FONT_PT``, right-aligned with their textbox pinned to the
+right margin -- see ``_normalize_letterhead``.
+
 "Auto-fix the safe stuff, flag the structural stuff." Section I additionally has
 its own structural standard (uppercase A-X, canonical names, merged catch-all),
 applied earlier by ``updater.write_finalized_categories``.
@@ -20,6 +24,8 @@ The module also exposes read-only detectors (``font_outliers``,
 """
 
 from __future__ import annotations
+
+import re
 
 from docx.oxml.ns import qn
 from docx.shared import Pt
@@ -31,11 +37,23 @@ from .flags import KIND_REVIEW
 
 TABLE_FONT_PT = 12.0     # every table cell renders at this size
 BORDER_PT = 0.5          # every table border is a single line this wide (half-point)
+LETTERHEAD_FONT_PT = 9.0   # firm letterhead in page headers: black, this size
+# (9pt: contact blocks conventionally sit below body size so they read as
+# quiet letterhead; the firm's 2026-era resume exports already used 9pt)
 
 _TARGET_SIZE = Pt(TABLE_FONT_PT)
 _TARGET_EMU = int(_TARGET_SIZE)
 _BORDER_SZ = str(int(round(BORDER_PT * 8)))   # Word stores width in 1/8 pt: 0.5pt -> "4"
 _BORDER_EDGES = ("top", "left", "bottom", "right", "insideH", "insideV")
+
+#: A page-header line that reads as firm letterhead (name w/ legal suffix,
+#: street address, city+zip, url/email). Deliberately generic -- no firm data.
+_LETTERHEADISH = re.compile(
+    r"www\.|https?://|@"
+    r"|\b\d{5}(-\d{4})?\b"
+    r"|\b(LLC|L\.L\.C\.|Inc\.?|Ltd\.?|Corp\.?)(\b|$)"
+    r"|\b(P\.?O\.?\s?Box|Suite|Ste|PMB|Rd|Road|St|Street|Ave|Avenue|Blvd)\b",
+    re.I)
 
 
 # --- labels -----------------------------------------------------------------
@@ -236,18 +254,125 @@ def border_outliers(doc) -> list[str]:
 
 # --- entry point ------------------------------------------------------------
 
-def proofread_document(doc, report, log=print) -> dict:
-    """Enforce the table house standard in place.
+def _normalize_letterhead(doc, report, log) -> int:
+    """Letterhead standard: every letterhead-looking line in a page header
+    renders black at LETTERHEAD_FONT_PT -- no blue firm names, no size drift.
 
-    Auto-fixes font size (-> 12pt) and text color (-> black) on every table and
-    flags border deviations (0.5pt single) for the human. Returns a summary dict.
+    Walks every header part's paragraphs at the XML level so lines inside
+    textboxes (where letterheads usually live, incl. both mc:AlternateContent
+    copies) are covered. Auto-fixed: color and size are cosmetic here.
+
+    Alignment is part of the standard too: letterhead lines are right-aligned
+    and their textbox (if any) is anchored to the right MARGIN with no right
+    inset, so the block's longest line ends flush with the body text's right
+    edge instead of drifting past or short of it.
+    """
+    fixed = 0
+    seen: set[int] = set()
+    for sec in doc.sections:
+        hdr = sec.header
+        if id(hdr._element) in seen:      # linked headers share the part
+            continue
+        seen.add(id(hdr._element))
+        for p_el in hdr._element.iter(qn("w:p")):
+            # DIRECT runs only: a paragraph that merely CONTAINS a letterhead
+            # textbox (plus, typically, the inline logo image) must not be
+            # touched -- right-aligning it would move the logo.
+            text = "".join(t.text or ""
+                           for r in p_el.findall(qn("w:r"))
+                           for t in r.findall(qn("w:t"))).strip()
+            if not text or not _LETTERHEADISH.search(text):
+                continue
+            changed = _right_align_letterhead(p_el)
+            for r_el in p_el.iter(qn("w:r")):
+                if r_el.find(qn("w:t")) is None:
+                    continue
+                rpr = r_el.find(qn("w:rPr"))
+                if rpr is None:
+                    rpr = r_el.makeelement(qn("w:rPr"), {})
+                    r_el.insert(0, rpr)
+                color = rpr.find(qn("w:color"))
+                if color is not None and color.get(qn("w:val")) not in (
+                        "000000", "auto"):
+                    color.set(qn("w:val"), "000000")
+                    changed = True
+                sz_val = str(int(LETTERHEAD_FONT_PT * 2))
+                for tag in ("w:sz", "w:szCs"):
+                    el = rpr.find(qn(tag))
+                    if el is None:
+                        el = rpr.makeelement(qn(tag), {})
+                        rpr.append(el)
+                        el.set(qn("w:val"), sz_val)
+                        changed = True
+                    elif el.get(qn("w:val")) != sz_val:
+                        el.set(qn("w:val"), sz_val)
+                        changed = True
+            if changed:
+                fixed += 1
+                report.applied("Letterhead",
+                               f"header line -> black {LETTERHEAD_FONT_PT:g}pt, "
+                               f"right-aligned to margin: \"{text[:40]}\"")
+    return fixed
+
+
+_WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+_WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+
+
+def _right_align_letterhead(p_el) -> bool:
+    """Right-align a letterhead paragraph and pin its enclosing textbox (when
+    it lives in one) to the right margin with no right inset -- the block's
+    right edge then matches the body text's right edge exactly."""
+    changed = False
+    ppr = p_el.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = p_el.makeelement(qn("w:pPr"), {})
+        p_el.insert(0, ppr)
+    jc = ppr.find(qn("w:jc"))
+    if jc is None:
+        jc = ppr.makeelement(qn("w:jc"), {})
+        mark_rpr = ppr.find(qn("w:rPr"))     # rPr must stay last in pPr
+        (mark_rpr.addprevious if mark_rpr is not None else ppr.append)(jc)
+    if jc.get(qn("w:val")) != "right":
+        jc.set(qn("w:val"), "right")
+        changed = True
+
+    anchor = next(iter(p_el.iterancestors(f"{{{_WP}}}anchor")), None)
+    if anchor is not None:
+        pos_h = anchor.find(f"{{{_WP}}}positionH")
+        if pos_h is not None and (pos_h.get("relativeFrom") != "margin"
+                                  or pos_h.find(f"{{{_WP}}}align") is None):
+            pos_h.set("relativeFrom", "margin")
+            for child in list(pos_h):
+                pos_h.remove(child)
+            align = pos_h.makeelement(f"{{{_WP}}}align", {})
+            align.text = "right"
+            pos_h.append(align)
+            changed = True
+        for bp in anchor.iter(f"{{{_WPS}}}bodyPr"):
+            if bp.get("rIns") != "0":
+                bp.set("rIns", "0")
+                changed = True
+    return changed
+
+
+def proofread_document(doc, report, log=print) -> dict:
+    """Enforce the document house standard in place.
+
+    Auto-fixes font size (-> 12pt) and text color (-> black) on every table,
+    normalizes the page-header letterhead (black, 9pt, right-aligned to the
+    content margin), and flags border deviations (0.5pt single) for the
+    human. Returns a summary dict.
     """
     sized = _normalize_font_size(doc, report, log)
     colored = _clear_colors(doc, report, log)
+    letterhead = _normalize_letterhead(doc, report, log)
     pp_borders = _apply_pastperf_borders(doc, report, log)
     borders = _flag_borders(doc, report, log)
-    if sized or colored or pp_borders or borders:
+    if sized or colored or letterhead or pp_borders or borders:
         log(f"[proofread] font-normalized {sized} table(s), color-cleared {colored}, "
-            f"bordered {pp_borders} past-perf table(s), flagged {borders} for borders.")
+            f"letterhead-fixed {letterhead} line(s), bordered {pp_borders} "
+            f"past-perf table(s), flagged {borders} for borders.")
     return {"font_tables": sized, "color_tables": colored,
+            "letterhead_lines": letterhead,
             "pp_border_tables": pp_borders, "border_flags": borders}

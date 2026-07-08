@@ -9,8 +9,9 @@ import tempfile
 from pathlib import Path
 
 from . import (compliance, config, datastore, formatcheck, formfill, forms,
-               generator, notice, pdfutil, proofread, resumes, updater)
-from .flags import KIND_ADD, KIND_MISSING
+               generator, notice, pdfutil, proofread, resume_rebuild, resumes,
+               updater)
+from .flags import KIND_ADD, KIND_MISSING, KIND_REVIEW
 
 
 _ILLEGAL_STEM = re.compile(r'[\\/:*?"<>|]')
@@ -38,7 +39,8 @@ def _now_iso() -> str:
     return _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
-def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log) -> str | None:
+def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log,
+                        cfg=None) -> str | None:
     """Assemble the deliverable PDF the way the real submittals are built:
     the exported body PDF + each person's one-page resume PDF, in Section II
     order. (Resumes never live in the .docx -- see the FY2026 references.)
@@ -61,19 +63,54 @@ def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log) -> str 
         return None
 
     parts: list[Path] = [Path(body_pdf)]
+    resume_pages: list[tuple[str, Path]] = []   # letterhead pass runs on these
     tmpdir: Path | None = None
     if resumes_dir and Path(resumes_dir).is_dir():
         res = resumes.cross_check(personnel, resumes_dir)
         for name, path in res["matched"]:
             ext = path.suffix.lower()
             if ext == ".pdf":
-                parts.append(path)
-                report.applied("Submittal PDF", f"resume page: {name}", new=path.name)
+                # Typography lint: a bad source PDF (stretched text, missing
+                # fonts) merges verbatim into the deliverable. When the house
+                # resume template is configured, re-typeset the page instead.
+                issues = pdfutil.resume_pdf_issues(path)
+                use = path
+                template = config.resume_template_abspath(cfg or {})
+                if issues and template and template.is_file():
+                    firm = store.get("firm") or {}
+                    rb = resume_rebuild.rebuild(
+                        path, template, out_docx.parent / "resumes_rebuilt",
+                        firm_names=[firm.get("dba"), firm.get("legal_name")])
+                    if rb["ok"]:
+                        use = Path(rb["pdf"])
+                        report.flag("Submittal PDF",
+                                    f"{name}'s resume PDF was damaged "
+                                    f"({'; '.join(issues)}) and was REBUILT onto "
+                                    "the house template -- proofread the rebuilt "
+                                    "page against the original before submitting.",
+                                    KIND_REVIEW, new=use.name)
+                        for n in rb["notes"]:
+                            report.applied("Submittal PDF", f"{name}: {n}")
+                        issues = []
+                    else:
+                        report.flag("Submittal PDF",
+                                    f"couldn't rebuild {name}'s damaged resume "
+                                    f"({rb['error']}); using the original.",
+                                    KIND_REVIEW, new=path.name)
+                resume_pages.append((name, Path(use)))
+                label = ("resume page (rebuilt): " if use is not path
+                         else "resume page: ")
+                report.applied("Submittal PDF", label + name, new=use.name)
+                for issue in issues:
+                    report.flag("Submittal PDF",
+                                f"{name}'s resume PDF {issue}; re-export it from "
+                                "the Word original so the page isn't distorted.",
+                                KIND_REVIEW, new=path.name)
             elif ext == ".docx":
                 tmpdir = tmpdir or Path(tempfile.mkdtemp(prefix="proposal_resume_"))
                 conv = pdfutil.export_pdf(path, tmpdir / f"{path.stem}.pdf")
                 if conv:
-                    parts.append(conv)
+                    resume_pages.append((name, Path(conv)))
                     report.applied("Submittal PDF",
                                    f"resume page (converted from .docx): {name}", new=path.name)
                 else:
@@ -87,6 +124,47 @@ def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log) -> str 
     else:
         report.flag("Submittal PDF",
                     "No resumes folder attached -- assembled the body only.", KIND_ADD)
+
+    # Letterhead standard: every resume page gets the BODY's letterhead block
+    # (identical text, size, color, position) stamped over its own drifting
+    # copy, so the whole deliverable carries one consistent header.
+    stamp = None
+    body_logo = None
+    if resume_pages:
+        stamp = pdfutil.build_letterhead_stamp(
+            body_pdf, out_docx.parent / "resumes_rebuilt" / "_letterhead_stamp.pdf")
+        if stamp is None:
+            report.flag("Submittal PDF",
+                        "couldn't build the letterhead stamp (no letterhead in the "
+                        "body, or Word unavailable); resume letterheads left as-is.",
+                        KIND_REVIEW)
+        else:
+            spec = pdfutil.letterhead_spec(body_pdf) or {}
+            body_logo = spec.get("logo_top")
+    for name, page_pdf in resume_pages:
+        use = page_pdf
+        if stamp is not None:
+            # Vertical standard: the body's block sits a fixed distance below
+            # its logo's top edge; resume logos render lower, so shift the
+            # stamp by this page's logo offset to keep the same relationship.
+            dy = 0.0
+            if body_logo is not None:
+                page_logo = pdfutil.logo_top(page_pdf)
+                if page_logo is not None:
+                    dy = max(-12.0, min(30.0, page_logo - body_logo))
+            tmpdir = tmpdir or Path(tempfile.mkdtemp(prefix="proposal_resume_"))
+            stamped, why = pdfutil.stamp_letterhead(
+                page_pdf, stamp, tmpdir / f"{page_pdf.stem} (LETTERHEAD).pdf",
+                dy=dy)
+            if stamped:
+                use = stamped
+                report.applied("Submittal PDF",
+                               f"letterhead standardized: {name}")
+            else:
+                report.flag("Submittal PDF",
+                            f"couldn't standardize {name}'s letterhead ({why}); "
+                            "page left as-is.", KIND_REVIEW, new=page_pdf.name)
+        parts.append(use)
 
     try:
         merged = pdfutil.merge_pdfs(parts)
@@ -161,7 +239,8 @@ def run_build(
 
     doc.save(str(out_docx))
     report.output = str(out_docx)
-    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log)
+    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log,
+                                    cfg=cfg)
     out_flags.write_text(report.to_markdown(), encoding="utf-8")
 
     config.update_state(
@@ -217,7 +296,8 @@ def run_generate(
 
     doc.save(str(out_docx))
     report.output = str(out_docx)
-    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log)
+    submittal = _assemble_submittal(store, out_docx, resumes_dir, report, log,
+                                    cfg=cfg)
     out_flags.write_text(report.to_markdown(), encoding="utf-8")
 
     config.update_state(

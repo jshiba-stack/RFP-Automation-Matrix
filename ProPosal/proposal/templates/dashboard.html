@@ -702,6 +702,13 @@
               </div>
             </div>
             <div class="full2">
+              <label>House resume template (.docx) — auto-rebuilds damaged resume PDFs at assembly; empty = off</label>
+              <div class="row">
+                <div style="flex:3;"><input type="text" name="resume_template_docx_path" id="setResumeTpl" value="{{ cfg.resume_template_docx_path or '' }}" placeholder="e.g. ...\Resumes\_Resume Template - 1P.docx"></div>
+                <div style="flex:0 0 auto;"><button class="btn btn-ghost" type="button" onclick="openBrowserFor('setResumeTpl')">📁</button></div>
+              </div>
+            </div>
+            <div class="full2">
               <label>Output folder (drafts + submittals)</label>
               <div class="row">
                 <div style="flex:3;"><input type="text" name="output_dir" id="setOutput" value="{{ cfg.output_dir or '' }}"></div>

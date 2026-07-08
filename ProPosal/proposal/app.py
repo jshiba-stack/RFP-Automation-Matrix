@@ -446,7 +446,8 @@ def settings():
     cfg = config.load_config()
     f = request.form
     for key in ("base_docx_path", "template_docx_path", "notice_pdf_path",
-                "output_dir", "resumes_dir", "default_department"):
+                "output_dir", "resumes_dir", "resume_template_docx_path",
+                "default_department"):
         if key in f:
             cfg[key] = f.get(key, "").strip().strip('"')
     cap = f.get("pdf_size_cap_mb", "").strip()

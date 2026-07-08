@@ -75,7 +75,8 @@ def test_font_left_alone_when_already_house_size():
     _house_borders(t)
     report = Report()
     out = proofread.proofread_document(doc, report, log=_silent)
-    assert out == {"font_tables": 0, "color_tables": 0, "pp_border_tables": 0, "border_flags": 0}
+    assert out == {"font_tables": 0, "color_tables": 0, "letterhead_lines": 0,
+                   "pp_border_tables": 0, "border_flags": 0}
     assert not report.applied_records and not report.flags
 
 
@@ -151,3 +152,52 @@ def test_safe_stem_sanitizes():
     assert _safe_stem("") is None
     assert _safe_stem("   ") is None
     assert _safe_stem("***") is None                   # nothing usable left
+
+
+# --- letterhead standard ------------------------------------------------------
+
+def _header_doc(lines_with_fmt):
+    """Doc whose section header holds letterhead-ish paragraphs.
+    lines_with_fmt: [(text, color_or_None, size_pt_or_None)]"""
+    doc = Document()
+    hdr = doc.sections[0].header
+    for text, color, size in lines_with_fmt:
+        p = hdr.add_paragraph()
+        r = p.add_run(text)
+        if color is not None:
+            r.font.color.rgb = color
+        if size is not None:
+            r.font.size = Pt(size)
+    return doc
+
+
+def test_letterhead_blue_firm_line_goes_black_10pt():
+    doc = _header_doc([
+        ("Acme Fictional, LLC", RGBColor(0x00, 0x70, 0xC0), 10),
+        ("123 Example Rd, Ste 9", None, 9),
+        ("Springfield, HI 96800", None, 9),
+        ("www.example.test", None, 12),
+    ])
+    report = Report()
+    fixed = proofread._normalize_letterhead(doc, report, _silent)
+    assert fixed == 4
+    runs = [p.runs[0] for p in doc.sections[0].header.paragraphs if p.runs]
+    assert all(r.font.size == Pt(proofread.LETTERHEAD_FONT_PT) for r in runs)
+    assert str(runs[0].font.color.rgb) == "000000"
+    assert any(f"black {proofread.LETTERHEAD_FONT_PT:g}pt" in r.summary
+               for r in report.applied_records)
+
+
+def test_letterhead_ignores_non_letterhead_header_text():
+    doc = _header_doc([("Draft for internal review", RGBColor(0xFF, 0, 0), 14)])
+    report = Report()
+    assert proofread._normalize_letterhead(doc, report, _silent) == 0
+    r = doc.sections[0].header.paragraphs[-1].runs[0]
+    assert r.font.size == Pt(14)          # untouched
+
+
+def test_letterhead_idempotent():
+    doc = _header_doc([("Acme Fictional, LLC", RGBColor(0, 0x70, 0xC0), 9)])
+    report = Report()
+    assert proofread._normalize_letterhead(doc, report, _silent) == 1
+    assert proofread._normalize_letterhead(doc, report, _silent) == 0

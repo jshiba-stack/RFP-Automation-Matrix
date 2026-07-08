@@ -5,6 +5,29 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-08
+
+### Changed
+- **ProPosal v0.14.0 → v0.15.0** — resume pages become standardized
+  deliverables; see [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md):
+  - **Root cause found for the "stretched resume" mystery**: source PDFs
+    re-saved by a desktop PDF editor draw text up to 33% taller than designed
+    and leave fonts un-embedded; the assembly merge was never at fault.
+  - **Typography lint** on every merged resume PDF (editor re-save, stretched
+    text, non-embedded fonts, off-Letter page → per-person REVIEW flags) and a
+    **typography-aware picker** (a clean same-generation sibling replaces an
+    editor-mangled newest pick; freshness always beats typography).
+  - **Auto-rebuild** (`proposal/resume_rebuild.py`): a damaged resume PDF with
+    no clean sibling is re-typeset onto the house template at assembly —
+    extract (word-spacing restoration) → parse → render → Word export → gated
+    by a lost-words check; never silent (REVIEW flag + "(REBUILT)" footer tag).
+    Includes the **"Present" rule** for the current employer's end date.
+  - **Letterhead standard, document-wide**: black 9pt, right edge flush with
+    the content margin, position matched to each page's logo — the body's
+    letterhead is measured and restamped over every resume page's drifting
+    copy, so the whole deliverable carries one identical firm block.
+  - Suite at 118 tests (21 new, fictional data).
+
 ## 2026-07-07
 
 ### Changed
