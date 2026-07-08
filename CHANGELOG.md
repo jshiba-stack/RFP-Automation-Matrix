@@ -5,6 +5,27 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-08 (b)
+
+### Changed
+- **ProPosal v0.15.0 → v0.16.0** — deliverable polish, all enforced at build;
+  see [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md):
+  - **Pagination standard**: no table row ever splits across pages; Section
+    IV always starts a fresh page (with V); narrower past-performance label
+    column so descriptions wrap less — the previously split table now fits
+    whole on its page.
+  - **Appendix divider** renders as a centered cover page for the resume
+    section; page numbering continues.
+  - **Live TOC**: exports update Word fields first, so the table of contents
+    always shows the final page numbers; entry indentation made uniform.
+  - **Two more resume standards**: hyperlinks render in surrounding text
+    color (auto-fixed in conversions, flagged in PDFs) and employment dates
+    normalized to "YYYY to YYYY/Present" (auto-fixed in conversions/rebuilds,
+    flagged in PDFs — the lint immediately surfaced three more non-uniform
+    resumes).
+  - **Submittal size** back under the 3.0 MB cap (3.47 → 2.26 MB) via
+    identical-object deduplication in the merge.
+
 ## 2026-07-08
 
 ### Changed

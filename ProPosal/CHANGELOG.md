@@ -4,6 +4,48 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.16.0] — 2026-07-08
+
+Deliverable polish: clean page flow, a smaller PDF, a live table of contents,
+and two more resume standards. All enforced automatically at build.
+
+### Added
+- **Pagination standard** (proofread pass): table rows never split across
+  pages (`w:cantSplit` document-wide — no more half-rows stranded on the next
+  page); Section IV always starts a new page (IV + V together); Section III
+  past-performance tables use a 1.5" label column so descriptions wrap less
+  (verified: the previously split table now fits whole on its page, with no
+  cascade onto its neighbors).
+- **Appendix cover page**: the Appendix divider heading is centered
+  horizontally and vertically (~2 lines above true center) in its own final
+  section — a proper cover for the resume pages. Page numbering continues
+  (no restart), and the base document's manual page break and stray trailing
+  paragraphs are cleaned up.
+- **Live table of contents**: `pdfutil.export_pdf` now drives Word COM
+  directly and updates all fields + tables of contents before exporting, so
+  TOC page numbers always reflect the final pagination (docx2pdf fallback;
+  the source file is never saved). TOC entries also get a 0.5" hanging
+  indent on the TOC 1 style — wide Roman numerals no longer push their text
+  to a different tab stop, and the dot leaders survive regeneration.
+- **Resume link-color standard**: hyperlink character styling (Word link
+  blue + underline) is stripped from `.docx` resume conversions so links
+  render in the surrounding text's color; PDF-source resumes drawing text in
+  link blue are flagged for review (`pdfutil.pdf_link_blue_text`, exact-color
+  match so the house heading blue can't false-positive).
+- **Employment-date standard** ("YYYY to YYYY" / "YYYY to Present"):
+  normalized automatically in `.docx` conversions and rebuilds
+  (`resume_rebuild.normalize_date_text` — hyphens, en dashes, "through",
+  "Current" all converted); PDF-source deviations are flagged with the
+  offending text quoted (`pdfutil.pdf_nonstandard_dates`).
+- Tests: 6 new — suite at 124, fictional data only.
+
+### Fixed
+- **Submittal size**: merging stamped resume pages embedded duplicate copies
+  of the letterhead stamp's font subsets and the shared logo; `merge_pdfs`
+  now deduplicates identical objects — 3.47 MB → 2.26 MB on a real build,
+  back under the 3.0 MB cap.
+- TOC entries III/IV/VI no longer indent differently from I/II/V.
+
 ## [0.15.0] — 2026-07-08
 
 Resume pages become standardized deliverables: damaged PDFs are detected and

@@ -75,9 +75,12 @@ def test_font_left_alone_when_already_house_size():
     _house_borders(t)
     report = Report()
     out = proofread.proofread_document(doc, report, log=_silent)
+    # pagination=1: the pass rightly marks the fresh table's rows no-split
     assert out == {"font_tables": 0, "color_tables": 0, "letterhead_lines": 0,
-                   "pp_border_tables": 0, "border_flags": 0}
-    assert not report.applied_records and not report.flags
+                   "pagination": 1, "pp_border_tables": 0, "border_flags": 0}
+    # the only applied change is the pagination pass marking rows no-split
+    assert all(r.location == "Pagination" for r in report.applied_records)
+    assert not report.flags
 
 
 def test_red_text_is_cleared_to_black():
@@ -201,3 +204,40 @@ def test_letterhead_idempotent():
     report = Report()
     assert proofread._normalize_letterhead(doc, report, _silent) == 1
     assert proofread._normalize_letterhead(doc, report, _silent) == 0
+
+
+def test_appendix_cover_centers_heading_and_section():
+    from docx.oxml.ns import qn
+    doc = Document()
+    doc.add_paragraph("body text before")
+    doc.add_paragraph("Appendix:  Resumes of Key Personnel", style="Heading 1")
+    report = Report()
+    changed = proofread._appendix_cover(doc, report, _silent)
+    assert changed >= 2
+    head = [p for p in doc.paragraphs if "Appendix" in p.text][0]
+    assert head._p.get_or_add_pPr().find(qn("w:jc")).get(qn("w:val")) == "center"
+    tail = doc.element.body.find(qn("w:sectPr"))
+    assert tail.find(qn("w:vAlign")).get(qn("w:val")) == "center"
+    prev = head._p.getprevious()
+    assert prev.find(qn("w:pPr")).find(qn("w:sectPr")) is not None
+    # earlier section stays top-aligned; pass is idempotent
+    assert prev.find(qn("w:pPr")).find(qn("w:sectPr")).find(qn("w:vAlign")) is None
+    assert proofread._appendix_cover(doc, report, _silent) == 0
+
+
+def test_toc_entry_indent_hanging_half_inch():
+    from docx.enum.style import WD_STYLE_TYPE
+    from docx.shared import Inches
+    doc = Document()
+    try:
+        doc.styles.add_style("toc 1", WD_STYLE_TYPE.PARAGRAPH)
+    except ValueError:
+        pass
+    report = Report()
+    assert proofread._toc_entry_indent(doc, report, _silent) == 1
+    pf = doc.styles["toc 1"].paragraph_format
+    assert pf.left_indent == Inches(0.5)
+    assert pf.first_line_indent == Inches(-0.5)
+    # tab stops untouched: the dot-leader tab must be able to regenerate
+    assert len(pf.tab_stops) == 0
+    assert proofread._toc_entry_indent(doc, report, _silent) == 0  # idempotent

@@ -168,3 +168,36 @@ def test_missing_words_gate(tmp_path):
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+def test_strip_hyperlink_styling(tmp_path):
+    from docx.oxml.ns import qn
+    d = docx.Document()
+    p = d.add_paragraph()
+    r = p.add_run("widgetlink.example")
+    r.font.underline = True
+    r.font.color.rgb = __import__("docx.shared", fromlist=["RGBColor"]).RGBColor(
+        0x05, 0x63, 0xC1)
+    r2 = p.add_run(" plain text")           # untouched
+    r3 = p.add_run("styled-link")
+    rpr = r3._r.get_or_add_rPr()
+    st = rpr.makeelement(qn("w:rStyle"), {})
+    st.set(qn("w:val"), "Hyperlink")
+    rpr.insert(0, st)
+
+    n = RR.strip_hyperlink_styling(d)
+    assert n == 2
+    assert r.font.color.rgb is None and r.font.underline is None
+    assert r3._r.get_or_add_rPr().find(qn("w:rStyle")) is None
+    assert r2.font.color.rgb is None        # was already plain
+    assert RR.strip_hyperlink_styling(d) == 0   # idempotent
+
+
+def test_normalize_date_text():
+    f = RR.normalize_date_text
+    assert f("2018 - Present") == "2018 to Present"
+    assert f("2010 – 2017") == "2010 to 2017"       # en dash
+    assert f("2011 through 2012") == "2011 to 2012"
+    assert f("2019 to Current") == "2019 to Present"
+    assert f("2015 to 2017") == "2015 to 2017"           # already standard
+    assert f("phone (808) 555-1212") == "phone (808) 555-1212"  # not a range

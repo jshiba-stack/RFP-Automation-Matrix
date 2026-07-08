@@ -385,6 +385,94 @@ def build_docx(parsed: Parsed, template_docx, out_docx) -> Path:
     return out_docx
 
 
+def prepare_docx_for_conversion(src, dst) -> dict:
+    """Copy a person's resume .docx to ``dst`` and apply the resume standard
+    that must happen before Word converts it: hyperlink styling stripped
+    (links match the surrounding text) and employment dates normalized to
+    "YYYY to YYYY/Present". The original file is never modified.
+    Returns ``{"links": n, "dates": n}``."""
+    import docx
+    from docx.oxml.ns import qn
+
+    shutil.copyfile(src, dst)
+    d = docx.Document(str(dst))
+    links = strip_hyperlink_styling(d)
+    dates = 0
+    for t_el in d.element.body.iter(qn("w:t")):
+        if not t_el.text:
+            continue
+        new = normalize_date_text(t_el.text)
+        if new != t_el.text:
+            t_el.text = new
+            dates += 1
+    if links or dates:
+        d.save(str(dst))
+    return {"links": links, "dates": dates}
+
+
+#: any recognizable year range, whatever the separator
+_RANGE_ANY_RE = re.compile(
+    r"((?:19|20)\d{2})\s*(?:[-–—]|to|through|thru)\s*"
+    r"((?:19|20)\d{2}|present|current)", re.I)
+#: the house standard form
+STD_RANGE_RE = re.compile(r"^(19|20)\d{2} to ((19|20)\d{2}|Present)$")
+
+
+def normalize_date_text(text: str) -> str:
+    """Employment-date standard: every year range reads "YYYY to YYYY" or
+    "YYYY to Present" (hyphens/dashes/'Current' normalized)."""
+    def _rep(m):
+        end = m.group(2)
+        if end.lower() in ("present", "current"):
+            end = "Present"
+        return f"{m.group(1)} to {end}"
+    return _RANGE_ANY_RE.sub(_rep, text)
+
+
+#: Word's default hyperlink character color
+HYPERLINK_BLUE = "0563C1"
+
+
+def strip_hyperlink_styling(doc) -> int:
+    """Resume standard: links render like the text around them.
+
+    Removes hyperlink character styling (Hyperlink run style, the Word link
+    blue, underline) from every body run that is inside a ``w:hyperlink``,
+    carries a Hyperlink-ish run style, or is colored the default link blue --
+    the run then inherits its paragraph's color. Returns runs changed.
+    """
+    from docx.oxml.ns import qn
+
+    n = 0
+    for r_el in doc.element.body.iter(qn("w:r")):
+        rpr = r_el.find(qn("w:rPr"))
+        if rpr is None:
+            continue
+        rstyle = rpr.find(qn("w:rStyle"))
+        linkish_style = (rstyle is not None
+                         and "hyperlink" in (rstyle.get(qn("w:val")) or "").lower())
+        color = rpr.find(qn("w:color"))
+        link_blue = (color is not None
+                     and (color.get(qn("w:val")) or "").upper() == HYPERLINK_BLUE)
+        in_link = r_el.getparent().tag == qn("w:hyperlink")
+        if not (in_link or linkish_style or link_blue):
+            continue
+        changed = False
+        if linkish_style:
+            rpr.remove(rstyle)
+            changed = True
+        if color is not None:
+            rpr.remove(color)
+            changed = True
+        u = rpr.find(qn("w:u"))
+        if u is not None:
+            rpr.remove(u)
+            changed = True
+        if changed:
+            n += 1
+    return n
+
+
 # ------------------------------------------------------------- verification
 
 _WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9./&+#'-]*")
@@ -443,6 +531,10 @@ def rebuild(pdf_path, template_docx, out_dir, firm_names=()) -> dict:
         if not parsed.sections:
             return {"ok": False, "error": "couldn't parse any sections",
                     "docx": None, "pdf": None, "notes": []}
+        for _h, items in parsed.sections:   # date-format standard
+            for it in items:
+                if isinstance(it, Job):
+                    it.dates = normalize_date_text(it.dates)
         notes = apply_present_rule(parsed, list(firm_names))
         # years the Present rule dropped shouldn't count as lost words
         dropped = {m.group(3).lower()

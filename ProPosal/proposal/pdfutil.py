@@ -47,23 +47,49 @@ def find_companion_pdf(docx_path) -> Path | None:
 
 
 def export_pdf(docx_path, out_pdf=None) -> Path | None:
-    """Export docx -> pdf via Word (docx2pdf). Returns the path or None.
+    """Export docx -> pdf via Word. Returns the path or None.
 
     Windows + Word only. Used to produce the submittal body PDF (and to
     convert a .docx resume) during assembly; safe to call from a worker
     thread (COM is initialized for the calling thread).
+
+    Drives Word COM directly and **updates fields + tables of contents
+    before exporting**, so the TOC's page numbers always reflect the final
+    pagination (docx2pdf exports the stale cached values). Falls back to
+    docx2pdf if the COM path fails. The source file is never saved.
     """
-    try:
-        from docx2pdf import convert
-    except Exception:
-        return None
+    out = Path(out_pdf) if out_pdf else Path(docx_path).with_suffix(".measure.pdf")
     try:  # COM must be initialized per-thread (the dashboard uses a worker)
         import pythoncom
         pythoncom.CoInitialize()
     except Exception:  # noqa: BLE001
         pass
-    out = Path(out_pdf) if out_pdf else Path(docx_path).with_suffix(".measure.pdf")
+
     try:
+        import win32com.client
+        word = win32com.client.DispatchEx("Word.Application")
+        try:
+            word.Visible = False
+            word.DisplayAlerts = 0
+            doc = word.Documents.Open(str(Path(docx_path).resolve()),
+                                      ReadOnly=False, AddToRecentFiles=False)
+            try:
+                doc.Fields.Update()
+                for toc in doc.TablesOfContents:
+                    toc.Update()
+            except Exception:  # noqa: BLE001 - field quirks must not block export
+                pass
+            doc.ExportAsFixedFormat(str(out.resolve()), 17)  # wdExportFormatPDF
+            doc.Close(False)                                 # never save source
+        finally:
+            word.Quit()
+        if out.exists():
+            return out
+    except Exception:  # noqa: BLE001 - fall back to docx2pdf below
+        pass
+
+    try:
+        from docx2pdf import convert
         convert(str(docx_path), str(out))
     except Exception:
         return None
@@ -173,7 +199,13 @@ def resume_pdf_issues(path) -> list[str]:
 
 
 def merge_pdfs(paths) -> bytes:
-    """Concatenate PDFs (in order) into one; returns the merged bytes."""
+    """Concatenate PDFs (in order) into one; returns the merged bytes.
+
+    Identical objects are deduplicated before writing: merging N stamped
+    resume pages otherwise embeds N copies of the letterhead stamp's font
+    subsets and of the shared logo image, which alone can add a megabyte
+    against the 3.0 MB submittal cap.
+    """
     from io import BytesIO
 
     from pypdf import PdfWriter
@@ -181,6 +213,11 @@ def merge_pdfs(paths) -> bytes:
     writer = PdfWriter()
     for p in paths:
         writer.append(str(p))
+    try:
+        writer.compress_identical_objects(remove_identicals=True,
+                                          remove_orphans=True)
+    except Exception:  # noqa: BLE001 - older pypdf: size cap check still warns
+        pass
     bio = BytesIO()
     writer.write(bio)
     return bio.getvalue()
@@ -244,6 +281,55 @@ def _zone_lines(runs) -> list[tuple[float, float, float, str]]:
         text = re.sub(r"\s+", " ", "".join(r[3] for r in grp)).strip()
         out.append((grp[0][0], grp[0][1], max(r[2] for r in grp), text))
     return out
+
+
+def pdf_link_blue_text(pdf_path) -> bool:
+    """True when page 1 draws text in Word's default hyperlink blue
+    (#0563C1). Final-form PDFs can't be recolored, so callers flag this for
+    review; the resume standard wants links matching the surrounding text."""
+    from pypdf import PdfReader
+
+    target = (0x05 / 255, 0x63 / 255, 0xC1 / 255)
+    state = {"fill": None, "hit": False}
+
+    def _before(op, operands, cm, tm):  # noqa: ANN001
+        if op == b"rg" and len(operands) == 3:
+            try:
+                state["fill"] = tuple(float(v) for v in operands)
+            except Exception:  # noqa: BLE001
+                state["fill"] = None
+        elif op in (b"g", b"k", b"sc", b"scn", b"cs"):
+            state["fill"] = None       # left RGB space / not a plain rg color
+        elif op in (b"Tj", b"TJ", b"'", b'"') and state["fill"] is not None:
+            if all(abs(a - b) <= 0.004 for a, b in zip(state["fill"], target)):
+                state["hit"] = True
+
+    try:
+        PdfReader(str(pdf_path)).pages[0].extract_text(
+            visitor_operand_before=_before)
+    except Exception:  # noqa: BLE001
+        return False
+    return state["hit"]
+
+
+def pdf_nonstandard_dates(pdf_path) -> list[str]:
+    """Employment-date ranges on page 1 that don't read "YYYY to
+    YYYY/Present" (the resume standard). Final-form PDFs can't be edited, so
+    callers flag these for review."""
+    from . import resume_rebuild as rr
+
+    bad = []
+    try:
+        lines = rr.extract_lines(pdf_path)
+    except Exception:  # noqa: BLE001
+        return []
+    for ln in lines:
+        rt = ln.right_text.strip()
+        if not rt or "page" in rt.lower():
+            continue
+        if rr._RANGE_ANY_RE.search(rt) and not rr.STD_RANGE_RE.match(rt):
+            bad.append(rt)
+    return bad
 
 
 def logo_top(pdf_path, page_index=0) -> float | None:

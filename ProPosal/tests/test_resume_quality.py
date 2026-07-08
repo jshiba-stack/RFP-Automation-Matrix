@@ -268,3 +268,37 @@ def test_stamp_letterhead_dy_shifts_block_down(tmp_path):
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+def test_pdf_link_blue_text_detection(tmp_path):
+    blue = (b"q 0.0196 0.3882 0.7569 rg "
+            b"BT /F1 10 Tf 1 0 0 1 72 600 Tm (widgetlink.example) Tj ET Q")
+    p = _raw_pdf(tmp_path / "blue.pdf", blue, {"/F1": HELVETICA})
+    assert pdfutil.pdf_link_blue_text(p) is True
+    # the house heading blue (#0070C0) must NOT trip it
+    heading = (b"q 0 0.4392 0.7529 rg "
+               b"BT /F1 10 Tf 1 0 0 1 72 600 Tm (SUMMARY) Tj ET Q")
+    p2 = _raw_pdf(tmp_path / "heading.pdf", heading, {"/F1": HELVETICA})
+    assert pdfutil.pdf_link_blue_text(p2) is False
+    black = _raw_pdf(tmp_path / "black.pdf",
+                     b"BT /F1 10 Tf 1 0 0 1 72 600 Tm (plain) Tj ET",
+                     {"/F1": HELVETICA})
+    assert pdfutil.pdf_link_blue_text(black) is False
+
+
+def test_pdf_nonstandard_dates(monkeypatch):
+    # unit-test the filter on crafted lines (pypdf plumbing covered elsewhere)
+    from proposal import resume_rebuild as rr
+    fake = [
+        rr.Line(y=330, x=72, size=10, bold=True,
+                text="Acme Fictional, LLC", right_text="2018 - Present"),
+        rr.Line(y=370, x=72, size=10, bold=True,
+                text="Initech", right_text="2015 to 2017"),
+        rr.Line(y=400, x=72, size=10, bold=True,
+                text="Globex", right_text="June 2012 to Present"),
+        rr.Line(y=760, x=72, size=9, bold=False,
+                text="CONFIDENTIAL", right_text="Page 1 of 1"),
+    ]
+    monkeypatch.setattr(rr, "extract_lines", lambda p: fake)
+    assert pdfutil.pdf_nonstandard_dates("any.pdf") == [
+        "2018 - Present", "June 2012 to Present"]

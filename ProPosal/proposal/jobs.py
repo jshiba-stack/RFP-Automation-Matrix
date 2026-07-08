@@ -101,6 +101,22 @@ def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log,
                 label = ("resume page (rebuilt): " if use is not path
                          else "resume page: ")
                 report.applied("Submittal PDF", label + name, new=use.name)
+                # standards a final-form PDF can't self-heal: flag for review
+                if use is path:
+                    if pdfutil.pdf_link_blue_text(path):
+                        report.flag("Submittal PDF",
+                                    f"{name}'s resume PDF draws text in hyperlink "
+                                    "blue; recolor it to match the surrounding "
+                                    "text (resume standard) and re-export.",
+                                    KIND_REVIEW, new=path.name)
+                    bad_dates = pdfutil.pdf_nonstandard_dates(path)
+                    if bad_dates:
+                        report.flag("Submittal PDF",
+                                    f"{name}'s resume dates aren't in the house "
+                                    f"format ({'; '.join(bad_dates[:3])}); the "
+                                    "standard is 'YYYY to YYYY/Present' -- fix "
+                                    "the source and re-export.",
+                                    KIND_REVIEW, new=path.name)
                 for issue in issues:
                     report.flag("Submittal PDF",
                                 f"{name}'s resume PDF {issue}; re-export it from "
@@ -108,11 +124,23 @@ def _assemble_submittal(store, out_docx: Path, resumes_dir, report, log,
                                 KIND_REVIEW, new=path.name)
             elif ext == ".docx":
                 tmpdir = tmpdir or Path(tempfile.mkdtemp(prefix="proposal_resume_"))
-                conv = pdfutil.export_pdf(path, tmpdir / f"{path.stem}.pdf")
+                # normalize a COPY (hyperlink styling -> surrounding text
+                # color); the person's own file is never touched
+                conv_src = tmpdir / path.name
+                fixes = resume_rebuild.prepare_docx_for_conversion(path, conv_src)
+                conv = pdfutil.export_pdf(conv_src, tmpdir / f"{path.stem}.pdf")
                 if conv:
                     resume_pages.append((name, Path(conv)))
                     report.applied("Submittal PDF",
                                    f"resume page (converted from .docx): {name}", new=path.name)
+                    if fixes["links"]:
+                        report.applied("Submittal PDF",
+                                       f"{name}: {fixes['links']} hyperlink-styled "
+                                       "run(s) recolored to match surrounding text")
+                    if fixes["dates"]:
+                        report.applied("Submittal PDF",
+                                       f"{name}: {fixes['dates']} date range(s) "
+                                       "normalized to 'YYYY to YYYY/Present'")
                 else:
                     report.flag("Submittal PDF",
                                 f"couldn't convert {name}'s .docx resume to PDF -- "
