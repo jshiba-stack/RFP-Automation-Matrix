@@ -29,7 +29,35 @@ ProPosal has two modes:
 
 Both read a hand-maintained **data store** (`data/stores/*.yaml`) — the single
 source of truth for firm info, categories, personnel, projects, and references.
-It's designed to also feed the deferred **SF330** and **DPW-120** form-fillers.
+It also feeds the **DPW-120** form-filler (and the deferred **SF330**).
+
+Beyond the two build modes, ProPosal **assembles the deliverable PDF** the way
+the real submittals are put together — the Word-exported body followed by each
+person's one-page resume PDF in Section II order — and enforces a set of
+document-wide standards on every build so the output ships clean:
+
+- **Section I classification.** Categories are reconciled against the
+  current-year DIT taxonomy (parsed from the annual notice), letters self-heal,
+  and the section is rebuilt to the house standard (uppercased `A–X`, sorted,
+  duplicates merged, canonical names). Uncertain matches are flagged, never
+  silently applied. An optional local LLM (Ollama, off by default) sharpens the
+  fuzzy suggestions; a deterministic scorer runs otherwise.
+- **Table, pagination & letterhead standards.** Every table is normalized to
+  12pt / black with 0.5pt borders; rows never split across pages; Section IV
+  starts a new page; the Appendix gets a centered cover page; the table of
+  contents regenerates with correct page numbers; and one identical letterhead
+  block (black, 9pt, right-aligned) is stamped across every page — body and
+  resume pages alike.
+- **Resume typography.** Every resume PDF merged in is linted for distortion
+  (a desktop PDF editor re-saving a file can stretch glyphs and drop embedded
+  fonts). A clean same-generation sibling is preferred automatically; if a
+  house resume template is configured, a damaged page with no clean sibling is
+  re-typeset onto it (gated by a lost-words check) rather than shipping
+  distorted.
+- **Compliance & validation.** A compliance checklist (measured against the
+  assembled PDF — size ≤ 3.0 MB, page limit, required sections) and a format
+  check run on every build, and the store can be validated against the City's
+  annual notice PDF.
 
 > Why not a naive find/replace? Word splits values across runs — `"Fiscal Year
 > 2026"` is stored as `['Fiscal Year 202', '6']` and an end-date as
@@ -138,16 +166,22 @@ Inspect a document's structure (the field-map probe):
 | `proposal/updater.py` | Primary mode: apply the mechanical edits, flag the rest. |
 | `proposal/generator.py` | Secondary mode: rebuild data-driven tables from the store, inherit static prose/styles from the template. |
 | `proposal/datastore.py` | Load + deep-merge YAML/JSON stores (lists merge by `id`). |
-| `proposal/compliance.py` | Practical checklist: sections, category subset, PDF size, page limit. |
-| `proposal/formatcheck.py` | Format check: footer, page-number field, heading styles, foreign styles. |
-| `proposal/pdfutil.py` | Measure an exported PDF (size / page count); optional Word export. |
-| `proposal/tools/extract_store.py` | Bootstrap a complete data store from an existing FINAL. |
+| `proposal/storewrite.py` | Comment-preserving store writer: append / update / delete / reorder records via YAML text-splice (JSON too). |
+| `proposal/skills.py` | Section I classifier: reconcile categories against the DIT taxonomy, finalize to the house standard (uppercase A–X, dedup, merged X). |
+| `proposal/dit_taxonomy.py` | Parse the notice's lettered `A.`–`X.` DIT list; cache to `assets/defaults/`. |
+| `proposal/llm/` | Pluggable local-LLM backend (Ollama over stdlib `urllib`), off by default; deterministic fallback otherwise. |
+| `proposal/proofread.py` | Document-wide standards pass: table font/colour/borders, pagination (`w:cantSplit`, section breaks, appendix cover), TOC indent, letterhead normalization. |
+| `proposal/compliance.py` | Practical checklist: sections, category subset, PDF size, page limit (measured on the assembled PDF). |
+| `proposal/formatcheck.py` | Format check: footer, page-number field, heading styles, foreign styles, table consistency. |
+| `proposal/pdfutil.py` | Measure/export PDFs via Word COM (fields + TOC updated before export); resume typography lint; letterhead spec/stamp/logo detection; dedup merge. |
+| `proposal/resumes.py` | Cross-verify `personnel` against the resumes folder; typography-aware resume picking; append/merge matched resumes. |
+| `proposal/resume_rebuild.py` | Re-typeset a damaged resume PDF onto the house template (parse → render → lost-words gate); "Present" employment rule. |
+| `proposal/tools/extract_store.py` | Bootstrap a complete data store from an existing FINAL (Sections I/II/III/IV). |
 | `proposal/flags.py` | Change/flag records + console and Markdown reports. |
 | `proposal/config.py` | `instance/config.json` settings + runtime state (adapted from ProSE). |
 | `proposal/jobs.py` | Orchestration shared by the CLI and the dashboard. |
-| `proposal/app.py` + `templates/` + `static/` | Local Flask dashboard (ocean-blue theme). |
+| `proposal/app.py` + `templates/` + `static/` | Local Flask dashboard (ocean-blue theme, tabbed UI + settings modal). |
 | `proposal/discovery.py` | Detect OneDrive/SharePoint syncs, scan a folder for submittals/stores, folder browser. |
-| `proposal/resumes.py` | Cross-verify `personnel` against an attached resumes folder; append matched resumes. |
 | `proposal/notice.py` | Parse the City annual notice PDF; validate FY, categories, required form, deadline. |
 | `proposal/formfill.py` + `forms.py` | Fill a fillable PDF form (DPW-120) from the data store; carry forward a previous fill. |
 | `proposal/tools/inspect_docx.py` | Read-only Phase-0 probe used to build the field map. |
@@ -173,6 +207,28 @@ Inspect a document's structure (the field-map probe):
   works now; **SF330**'s bundled PDF is flat (provide a fillable template to use
   it). The field map is a small demo — extend as the store gains data. The
   optional LLM requirements check is design-only (`docs/phase6-requirements-llm.md`).
+
+Beyond the original six phases, later releases turned ProPosal into a full
+end-to-end submittal builder (see `CHANGELOG.md` for detail):
+
+- **Content round-trip & entry management** (v0.8–v0.11). Capture and
+  **import** Sections I/II/III/IV from a previous `.docx` into the dashboard
+  editors (edit / delete / reorder, comment-preserving), then Build **syncs
+  content back** into the document — appending or updating in place with cloned
+  formatting, never deleting.
+- **PDF-level submittal assembly** (v0.12). The deliverable is assembled at the
+  PDF level: Word-exported body + each person's one-page resume PDF in Section II
+  order → `<draft> (SUBMITTAL).pdf`, verified page-for-page against the reference.
+- **Proofread / formatting standards** (v0.13–v0.14, v0.16). Output file naming,
+  a document-wide table standard (12pt / black / 0.5pt borders), and a pagination
+  standard (no split rows, Section IV page break, appendix cover page, live TOC).
+- **Section I DIT classifier** (v0.14). Reconcile categories against the
+  current-year taxonomy and rebuild Section I to the house standard; optional
+  local LLM, deterministic fallback. Tabbed UI + settings modal.
+- **Resume standardization** (v0.15–v0.16). Typography lint + typography-aware
+  picking, auto-rebuild of damaged resumes onto a house template, a document-wide
+  letterhead standard, link-colour and employment-date standards, and PDF size
+  deduplication.
 
 ## Notes & limits
 
