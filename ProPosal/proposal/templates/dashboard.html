@@ -150,13 +150,13 @@
     <div class="grid">
       <!-- ============ STEP 2: SUBMITTAL CONTENT (data store) ============ -->
 
-      <!-- 2 (intro): IMPORT FROM A PREVIOUS SUBMITTAL -->
+      <!-- 2: IMPORT FROM A PREVIOUS SUBMITTAL -->
       <div class="card full">
         <h2><span class="step">2</span>Import content from a previous submittal (optional)</h2>
         <p class="lead">Pull the editable sections — <strong>II Personnel</strong>,
           <strong>III Past Performance</strong>, <strong>IV Project Listing</strong> — out of an existing
           document into the editors below (saved as <code class="mono">store_imported.yaml</code> in your
-          source). Edit them there, then <strong>Build (3)</strong> re-applies everything to the document.</p>
+          source). Edit them there, then <strong>Build (4)</strong> re-applies everything to the document.</p>
         <form method="post" action="{{ url_for('import_doc') }}"
               onsubmit="return confirm('Import will OVERWRITE store_imported.yaml, including any edits you made to previously imported entries. Continue?')">
           <div class="row">
@@ -178,7 +178,7 @@
 
       <!-- SECTION I: PROFESSIONAL SERVICE CATEGORIES (skills) -->
       <div class="card full">
-        <h2><span class="step">I</span>Professional Service Categories (Section I) — your skills</h2>
+        <h2><span class="step">3a</span>Professional Service Categories (Section I) — your skills</h2>
         <p class="lead">The DIT service categories you're applying under.
           <strong>Classify</strong> checks each skill against the current-year notice taxonomy:
           it auto-corrects a skill's <code class="mono">DIT&nbsp;#</code> when the category name
@@ -283,12 +283,12 @@
         </details>
       </div>
 
-      <!-- 2a: PERSONNEL & RESUMES (Section II) -->
+      <!-- 3b: PERSONNEL & RESUMES (Section II) -->
       <div class="card full">
-        <h2><span class="step">2a</span>Personnel &amp; Resumes (II. Professional Qualifications)</h2>
+        <h2><span class="step">3b</span>Personnel &amp; Resumes (II. Professional Qualifications)</h2>
         <p class="lead">Maintain the Section II resource table and the resumes appendix together.
           <strong>Order matters:</strong> resumes are appended at the end of the proposal in exactly this
-          order when you <strong>Build (3)</strong> assembles the submittal PDF — use ↑↓ to arrange.
+          order when you <strong>Build (4)</strong> assembles the submittal PDF — use ↑↓ to arrange.
           Build also appends new resources to the document's table and updates changed qualifications
           in place.</p>
 
@@ -375,11 +375,11 @@
         </div>
       </div>
 
-      <!-- 2b: PAST PERFORMANCE (Section III) -->
+      <!-- 3c: PAST PERFORMANCE (Section III) -->
       <div class="card">
-        <h2><span class="step">2b</span>Past Performance (III)</h2>
+        <h2><span class="step">3c</span>Past Performance (III)</h2>
         <p class="lead">One block per engagement, exactly like the submittal's table.
-          <strong>Build (3)</strong> appends new blocks to Section III (cloning an existing block's
+          <strong>Build (4)</strong> appends new blocks to Section III (cloning an existing block's
           formatting) and updates changed fields in matched blocks. The gray text is example only.</p>
         <form method="post" action="{{ url_for('add_entry') }}" id="form-pp">
           <input type="hidden" name="kind" value="pp">
@@ -420,10 +420,10 @@
         {% else %}<p class="empty">No Past Performance entries in the data store yet.</p>{% endif %}
       </div>
 
-      <!-- 2c: CAPACITY / PROJECT LISTING (Section IV) -->
+      <!-- 3d: CAPACITY / PROJECT LISTING (Section IV) -->
       <div class="card">
-        <h2><span class="step">2c</span>Capacity: Project Listing (IV)</h2>
-        <p class="lead"><strong>Build (3)</strong> appends new rows to the Section IV table and updates
+        <h2><span class="step">3d</span>Capacity: Project Listing (IV)</h2>
+        <p class="lead"><strong>Build (4)</strong> appends new rows to the Section IV table and updates
           changed dates (its <em>strict rebuild</em> option rebuilds the whole table in this order).
           End Date <code class="mono">ongoing</code> renders as “<em>&lt;year&gt;</em>+” and refreshes
           every cycle; a year means completed.</p>
@@ -461,9 +461,9 @@
         {% else %}<p class="empty">No Capacity rows in the data store yet.</p>{% endif %}
       </div>
 
-      <!-- ============ STEP 3: BUILD THE DRAFT + SUBMITTAL PDF ============ -->
+      <!-- ============ STEP 4: BUILD THE DRAFT + SUBMITTAL PDF ============ -->
       <div class="card full">
-        <h2><span class="step">3</span>Build the draft &amp; submittal PDF</h2>
+        <h2><span class="step">4</span>Build the draft &amp; submittal PDF</h2>
         <p class="lead">Pick a starting document — last year's FINAL, this year's working draft, or a
           template. ProPosal refreshes the dates (the fiscal year stays unless the store or an override
           says otherwise), syncs your step-2 content into Sections II/III/IV (new entries appended with
@@ -497,7 +497,7 @@
                 (rows not in the store are dropped) instead of appended/updated in place.
               </label>
               <div class="hint">Blank year/date = the store's values (or the document's own year and today).
-                The resumes folder is managed in card 2a and used automatically.</div>
+                The resumes folder is managed in card 3b and used automatically.</div>
             </div>
           </details>
           <div class="actions"><button class="btn btn-primary" type="submit">Build draft + submittal PDF</button></div>
@@ -509,11 +509,11 @@
 
     <section id="tab-forms" class="tabpanel" hidden>
     <div class="grid">
-      <!-- ============ STEP 4: CHECK & FORMS ============ -->
+      <!-- ============ FORMS & OTHER DOCUMENTS (separate tab; unnumbered) ============ -->
 
-      <!-- 4a: VALIDATE AGAINST THE CITY NOTICE -->
+      <!-- VALIDATE AGAINST THE CITY NOTICE -->
       <div class="card full">
-        <h2><span class="step">4a</span>Validate against the City notice (requirements)</h2>
+        <h2>Validate against the City notice (requirements)</h2>
         <p class="lead">Cross-check your data store against the City's annual notice PDF: fiscal year,
           submittal deadline, attachment size cap, required form (e.g. SF330 for some departments), and
           whether your selected categories are actually listed for your department. Flag-only.</p>
@@ -550,9 +550,9 @@
         {% endif %}
       </div>
 
-      <!-- 4b: FILL A FORM (SF330 / DPW-120) -->
+      <!-- FILL A FORM (SF330 / DPW-120) -->
       <div class="card full">
-        <h2><span class="step">4b</span>Fill a form (SF330 / DPW-120)</h2>
+        <h2>Fill a form (SF330 / DPW-120)</h2>
         <p class="lead">Fill a fillable PDF form from the data store. Each form has a default blank template;
           override it with your own, and optionally upload a previously-filled copy to carry values forward
           (matched by field name) — anything that doesn't line up is flagged.</p>

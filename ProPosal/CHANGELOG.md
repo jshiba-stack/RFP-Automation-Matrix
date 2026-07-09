@@ -4,6 +4,21 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.16.1] — 2026-07-08
+
+Dashboard step-numbering consistency fix.
+
+### Fixed
+- **Consistent step numbering** on the dashboard: the workflow steps ran
+  `1, 2, I, 2a, 2b, 2c, 3, … 5`. Renumbered to a clean `1, 2, 3a–3d, 4, 5`
+  sequence — the four content editors (Section I skills, II Personnel,
+  III Past Performance, IV Project Listing) are now `3a–3d`, Build is `4`,
+  and Latest result stays `5`. In-text references (`Build (3)` → `Build (4)`,
+  "card 2a" → "card 3b") and the template's dev comments were updated to match.
+- The **Forms & other documents** tab (Validate / Fill a form) lost its `4a`/`4b`
+  badges — once Build became step 4 they read as sub-steps of Build. The Forms
+  tab is now an unnumbered utility track, separate from the 1–5 main flow.
+
 ## [0.16.0] — 2026-07-08
 
 Deliverable polish: clean page flow, a smaller PDF, a live table of contents,
