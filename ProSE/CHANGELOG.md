@@ -4,6 +4,32 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-07-14
+
+Spreadsheet workflow upgrades: keyword provenance, expiry handling, and
+respect for the user's own formatting.
+
+### Added
+- **"Keyword" column** (rightmost, column N). Each result records the
+  keyword(s) it matched. Because a solicitation can surface under several
+  keywords (dedup is by solicitation #), every matching keyword is accumulated
+  into one comma-separated cell rather than only the first.
+- **Expired-solicitation handling.** Rows whose Due Date is past the current
+  local date/time are struck through and greyed, and sorted to the bottom of
+  the sheet (active rows stay newest-first). Recomputed on every scan, so a row
+  that lapses between runs drops and strikes automatically. Due dates parse
+  `MM/DD/YYYY hh:mm AM/PM` (and a bare date = active through end of that day);
+  unparseable dates are never hidden.
+
+### Changed
+- **User formatting is now preserved across scans.** The rewrite previously
+  forced the program's own thin border and column widths onto every cell each
+  run. It now detects and re-applies the *dominant* cell border already present
+  (weight + colour), and only seeds a default column width for columns that
+  have none yet — so manually applied black borders and adjusted column widths
+  survive every scan and extend to newly-added rows. Falls back to the defaults
+  on a fresh/blank sheet.
+
 ## [0.2.1] — 2026-07-02
 
 Robustness fixes from the 2026-07-02 suite deep review

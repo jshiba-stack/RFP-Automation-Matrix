@@ -130,6 +130,7 @@ def _hands_to_record(item: dict) -> dict:
         "system": (item.get("system") or "").upper(),
         "details_url": item.get("detailsUrl") or "",
         "status": item.get("status") or "",
+        "keyword": "",  # filled in scan(): the keyword(s) that matched this row
     }
 
 
@@ -202,7 +203,17 @@ def scan(keywords: list[str], log=print) -> list[dict]:
             continue
         log(f"  '{kw}': {len(records)} active result(s)")
         for rec in records:
-            seen.setdefault(rec["solicitation_number"], rec)
+            number = rec["solicitation_number"]
+            existing = seen.get(number)
+            if existing is None:
+                rec["keyword"] = kw
+                seen[number] = rec
+            else:
+                # Same solicitation matched another keyword — accumulate it so
+                # the row shows every keyword it came up under.
+                current = [k.strip() for k in existing["keyword"].split(",") if k.strip()]
+                if kw not in current:
+                    existing["keyword"] = ", ".join(current + [kw])
 
     log(f"  {len(seen)} unique solicitation(s); fetching contact details...")
 

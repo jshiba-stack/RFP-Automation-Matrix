@@ -30,7 +30,7 @@ schedules, and email settings.
 | Step | What happens |
 |------|--------------|
 | **Scan** (Schedule 1) | For each keyword, searches the **HANDS** opportunity API for *active* solicitations (fast, covers HiePRO and related systems), then pulls full contact details for each — from the **HiePRO** detail page for HiePRO-sourced ones, or the public **HANDS** opportunity endpoint for county/UH/agency ones — and updates the spreadsheet. Runs **Daily** or **Every 12 hours** at the time you set (HST). |
-| **Spreadsheet** | New solicitations are inserted at the **top** (newest first), de-duplicated by Solicitation #. The app fills only the 8 data columns; your manual columns (Status, Pursue, Emailed, Entered SF) are **never overwritten**. Styling is applied automatically — no manual formatting needed. |
+| **Spreadsheet** | New solicitations are inserted at the **top** (newest first), de-duplicated by Solicitation #. The app fills only the data columns; your manual columns (Status, Pursue, Emailed, Entered SF) are **never overwritten**. **Expired** solicitations (past their Due Date) are struck through and sorted to the bottom. A **Keyword** column records which keyword(s) each row matched. Your own cell borders and column widths are **preserved** across scans. |
 | **Email** (Schedule 2) | On the weekday(s) and time you choose, emails the spreadsheet to your recipient list via Gmail. |
 
 You can also trigger **Scan now** / **Send email now** from the dashboard.
@@ -121,8 +121,15 @@ Entry point: `python -m prose` (started for you by `start.bat`). Subcommands:
   focused. Edit the list anytime in the dashboard.
 - **Spreadsheet columns (left→right):** Status · Solicitation # · Organization ·
   Solicitation Title · Published · Due Date · Pursue · Emailed · Status ·
-  Entered SF · Contact Name · Phone · Email. The app fills Solicitation #,
-  Organization, Title, Published, Due Date, Contact Name, Phone, Email.
+  Entered SF · Contact Name · Phone · Email · Keyword. The app fills Solicitation #,
+  Organization, Title, Published, Due Date, Contact Name, Phone, Email, and
+  Keyword (the keyword[s] the row matched).
+- **Expired rows:** once a solicitation's Due Date has passed, its row is struck
+  through, greyed, and moved to the bottom of the sheet (re-evaluated on every
+  scan). Active rows stay newest-first on top.
+- **Your formatting is kept:** if you apply your own cell borders or resize
+  columns, those are preserved on every scan (and applied to new rows too) — the
+  app no longer forces its default border/widths over your changes.
 - On Windows the dashboard does **not** need to stay open — scheduling is handled
   by Windows Task Scheduler (registered on Save). See *Automatic scheduling* above.
 - `python -m prose scan` / `python -m prose email` run a single job and exit. The

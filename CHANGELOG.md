@@ -5,6 +5,20 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-14
+
+### Changed
+- **ProSE v0.2.1 → v0.3.0** — spreadsheet workflow upgrades; see
+  [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md):
+  - **Keyword column** (rightmost): each row records the keyword(s) it matched,
+    accumulated comma-separated when a solicitation surfaces under several.
+  - **Expiry handling**: rows past their Due Date are struck through, greyed,
+    and sunk to the bottom (active rows stay newest-first); recomputed every
+    scan against the current local time.
+  - **User formatting preserved**: manually applied cell borders and adjusted
+    column widths now survive every scan (and extend to new rows), instead of
+    being overwritten by the program's defaults.
+
 ## 2026-07-08 (b)
 
 ### Changed
