@@ -47,9 +47,9 @@ the job description.
   roughly 2 hours of manual portal-checking and data entry per scan with an
   unattended job `(est.)`.
 - Architected the extractor to run with zero LLM inference: the same per-scan
-  extraction done by prompting a model would process roughly 25 million tokens a
-  year (about $40 at Haiku-tier rates); the deterministic pipeline avoids that
-  cost entirely and runs offline and private `(est.; basis below)`.
+  extraction done by prompting a model would process roughly 70,000 tokens per
+  scan (about 480,000 per week at a daily cadence); the deterministic pipeline
+  handles it with no model call, offline and private `(est.; basis below)`.
 - Made an automated refresh run safely alongside a human collaborator on one
   shared workbook: non-destructive column updates, dedup by stable key, and
   preservation of the user's own formatting on every run `(measured)`.
@@ -77,16 +77,17 @@ you refine them.
   figure), automated build about 3 minutes. Reduction about 99%. Per submittal.
 - **Scan time saved:** manual keyword-checking across both portals plus recording
   about 2 hours per scan (your figure); the scheduled job runs unattended.
-- **Token cost-avoidance (ProSE):** models the hypothetical of doing each scan by
-  prompting a model. Assumes about 30 solicitations per scan, about 2,000 input
-  and 300 output tokens each (about 69,000 tokens per scan), run daily (about 25M
-  tokens per year). At Haiku-tier pricing ($1 input / $5 output per million
-  tokens) that is about $0.11 per scan, about $40 per year; about $115 per year
-  at Sonnet-tier pricing. The product itself uses no model, so this is cost the
-  deterministic design avoids, not cost that was ever paid.
-- Product-efficiency framing (runs offline, free, private) is the durable point;
-  the dollar figure is modest because a single scan is cheap to run through a
-  model. Lead with time saved and the zero-inference architecture.
+- **Token throughput avoided (ProSE):** models the hypothetical of doing each scan
+  by prompting a model. Assumes about 30 solicitations per scan, about 2,000 input
+  and 300 output tokens each (about 69,000 tokens per scan), run daily (about
+  480,000 tokens per week, about 25M per year). The product itself uses no model,
+  so this is processing the deterministic design handles with zero inference, not
+  cost that was ever paid. Report it in tokens, not dollars: the dollar cost of a
+  single scan is negligible and model pricing shifts, whereas token throughput is
+  a stable, model-agnostic figure.
+- Lead with time saved and the zero-inference architecture (runs offline, free,
+  private); those are the durable points. Express inference cost-avoidance in
+  token throughput, not dollars.
 
 ## How to use this file
 

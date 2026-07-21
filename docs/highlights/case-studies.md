@@ -153,7 +153,7 @@ no longer produces a lost scan or a litter of copies.
 - Human action columns and formatting preserved across every scan `(measured)`
 - Duplicate rows collapsed by stable key; lock-aware scan skips and retries `(measured)`
 - Replaces about 2 hours of manual portal-checking and data entry per scan, run unattended `(est.)`
-- Runs with zero LLM inference (deterministic extraction), avoiding the cost of an equivalent model-prompted approach `(est.; basis in resume-bullets.md)`
+- Runs with zero LLM inference (deterministic extraction), avoiding roughly 70,000 tokens of model processing per scan (about 480,000 per week) `(est.; basis in resume-bullets.md)`
 
 **Demonstrates:** building automation around a human workflow, concurrency and
 data-integrity thinking, treating the user's work as a first-class constraint.
