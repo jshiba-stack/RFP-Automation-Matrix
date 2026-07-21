@@ -25,8 +25,9 @@ from datetime import datetime
 from pathlib import Path
 
 import openpyxl
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.protection import SheetProtection
 
 # Column layout (1-based). Order matches the spec exactly.
 HEADERS = [
@@ -105,11 +106,16 @@ HEADER_FONT = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
 DATA_FONT = Font(name="Calibri", size=11, color="222222")
 # Expired solicitations (past their due date) are struck through and greyed.
 EXPIRED_FONT = Font(name="Calibri", size=11, color="9A9A9A", strike=True)
+# Cell locking (only enforced by Excel once the sheet is protected). Used to
+# make the Solicitation # column read-only while everything else stays editable.
+LOCKED = Protection(locked=True)
+UNLOCKED = Protection(locked=False)
 _THIN = Side(style="thin", color="BFC9CE")
 BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 LEFT_WRAP = Alignment(horizontal="left", vertical="center", wrap_text=True)
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=False)
+CENTER_WRAP = Alignment(horizontal="center", vertical="center", wrap_text=True)
 SHEET_TITLE = "Scanned Professional Services"
 
 
@@ -156,13 +162,40 @@ def _detect_border(ws):
     return representative[counts.most_common(1)[0][0]]
 
 
-def _style_header(ws, border=BORDER) -> None:
+def _apply_protection(ws, protect_id: bool) -> None:
+    """Turn the Solicitation # column read-only via sheet protection, or clear
+    protection entirely. Excel enforces this in its UI; openpyxl (ProSE) writes
+    through it regardless, so scans keep refreshing the locked column.
+
+    Structural ops (insert/delete rows & columns) stay blocked, but the things a
+    reviewer actually uses — selecting cells, sorting, AutoFilter, formatting —
+    are explicitly allowed so the collaborator's workflow isn't hindered. No
+    password: this guards against *accidental* edits; Review > Unprotect Sheet
+    removes it if ever needed.
+    """
+    if not protect_id:
+        ws.protection = SheetProtection(sheet=False)
+        return
+    ws.protection = SheetProtection(
+        sheet=True,
+        selectLockedCells=False, selectUnlockedCells=False,   # allow selecting/copying
+        sort=False, autoFilter=False,                         # allow sort + filter
+        formatCells=False, formatColumns=False, formatRows=False,  # allow formatting
+        insertRows=True, insertColumns=True, insertHyperlinks=True,
+        deleteRows=True, deleteColumns=True, pivotTables=True,
+        objects=False, scenarios=False,
+    )
+
+
+def _style_header(ws, border=BORDER, protect_id=False) -> None:
     for col in range(1, len(HEADERS) + 1):
         cell = ws.cell(row=1, column=col, value=HEADERS[col - 1])
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
         cell.alignment = HEADER_ALIGN
         cell.border = border
+        if protect_id:
+            cell.protection = LOCKED  # headers aren't editable when protected
         # Only seed the default width for columns that have no dimension yet (a
         # fresh sheet, or the newly-added Keyword column). Any column already in
         # column_dimensions keeps its width, preserving the user's adjustments.
@@ -175,12 +208,19 @@ def _style_header(ws, border=BORDER) -> None:
     ws.freeze_panes = "A2"
 
 
-def _style_data_cell(cell, col: int, banded: bool, expired: bool = False, border=BORDER) -> None:
+def _style_data_cell(cell, col: int, banded: bool, expired: bool = False, border=BORDER,
+                     protect_id: bool = False) -> None:
     cell.font = EXPIRED_FONT if expired else DATA_FONT
     cell.border = border
+    if protect_id:
+        # Lock only the Solicitation # column; everything else stays editable.
+        cell.protection = LOCKED if col == SOLICITATION_COL else UNLOCKED
     # Title left-wraps; short data/manual columns are centered for a clean look.
+    # Phone (12) centers but wraps, so a dual-contact multi-line value shows both.
     if col in (3, 4, 11, 13, 14):
         cell.alignment = LEFT_WRAP
+    elif col == 12:
+        cell.alignment = CENTER_WRAP
     else:
         cell.alignment = CENTER
     if banded:
@@ -209,10 +249,23 @@ def _read_rows(ws) -> list[dict]:
     return rows
 
 
-def update_spreadsheet(path, details: list[dict]) -> dict:
+def update_spreadsheet(path, details: list[dict], skip_on_lock: bool = False,
+                       protect_id: bool = False) -> dict:
     """Merge scanned ``details`` into the workbook at ``path``.
 
-    Returns {"new": int, "updated": int, "total_rows": int}.
+    Returns {"new": int, "updated": int, "total_rows": int, ...}.
+
+    ``skip_on_lock`` controls what happens when the file is locked (open in
+    Excel / held by a co-author): when False (local use) the merge is saved to a
+    timestamped sibling so results aren't lost; when True (a shared
+    SharePoint/OneDrive workbook) the write is SKIPPED instead — no sibling is
+    dropped into the shared library, and the next scheduled scan merges once the
+    file is closed. Scans re-query the source every run, so nothing is lost
+    permanently either way.
+
+    ``protect_id`` locks the Solicitation # column (via Excel sheet protection)
+    so a collaborator can't accidentally edit the key ProSE matches rows on;
+    every other column stays editable. Re-applied every run.
     """
     path = Path(path)
     if path.exists():
@@ -294,17 +347,30 @@ def update_spreadsheet(path, details: list[dict]) -> dict:
         is_expired = i >= first_expired
         for col in range(1, len(HEADERS) + 1):
             cell = ws.cell(row=row, column=col, value=rec.get(col))
-            _style_data_cell(cell, col, banded, is_expired, data_border)
+            _style_data_cell(cell, col, banded, is_expired, data_border, protect_id)
 
     # Re-assert header styling (cheap, keeps look consistent).
-    _style_header(ws, data_border)
+    _style_header(ws, data_border, protect_id)
+    # Lock the Solicitation # column (or clear protection) every run.
+    _apply_protection(ws, protect_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     saved_to = path
     try:
         wb.save(path)
     except PermissionError:
-        # The workbook is open in Excel (Windows locks it). Don't lose the
-        # scan: save to a timestamped sibling and report where it went.
+        # The workbook is open in Excel / held by a co-author (Windows locks it).
+        if skip_on_lock:
+            # Shared library: skip this run rather than littering a conflicting
+            # sibling into the synced folder. The next scan will merge.
+            return {
+                "new": 0,
+                "updated": 0,
+                "total_rows": len(ordered_records),
+                "saved_to": str(path),
+                "diverted": False,
+                "skipped_locked": True,
+            }
+        # Local use: don't lose the scan — save to a timestamped sibling.
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         saved_to = path.with_name(f"{path.stem} (scan {stamp}){path.suffix}")
         wb.save(saved_to)
@@ -315,4 +381,5 @@ def update_spreadsheet(path, details: list[dict]) -> dict:
         "total_rows": len(ordered_records),
         "saved_to": str(saved_to),
         "diverted": saved_to != path,
+        "skipped_locked": False,
     }

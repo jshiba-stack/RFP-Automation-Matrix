@@ -115,6 +115,18 @@ Entry point: `python -m prose` (started for you by `start.bat`). Subcommands:
   HiePRO detail page for HiePRO-sourced solicitations, or the public HANDS
   opportunity endpoint for county/UH/agency ones — so every row gets contact
   info where the source provides it.
+- **Contacts:** HANDS notices often list two people — a **Specifications
+  Contact** (the SME who owns the scope) and a **Buyer** (procurement officer).
+  ProSE records **both**, one per line in the same cell (specifications first,
+  buyer second, each tagged with its role), across Contact Name / Phone / Email.
+  Names are normalized to Title Case.
+- **Sharing with a collaborator:** point the workbook path (Workbook card) at a
+  **SharePoint/OneDrive-synced** file so one document is the single source of
+  truth — ProSE refreshes the data columns while a collaborator fills the action
+  columns; his manual columns are preserved every scan. Enable **Shared
+  workbook** so a scan skips (and retries) rather than dropping a copy into the
+  library if the file is open, and **Lock the Solicitation # column** to stop
+  accidental edits to the dedup key.
 - **Keyword tip:** very short/common keywords match a lot. For example `AI` and
   `Web` match many unrelated notices; prefer specific phrases (e.g.
   `Artificial Intelligence`, `Oracle`, `Microsoft Fabric`) to keep the sheet

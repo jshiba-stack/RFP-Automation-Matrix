@@ -5,6 +5,22 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-21
+
+### Changed
+- **ProSE v0.3.0 → v0.4.0** — shared-workbook collaboration; see
+  [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md):
+  - **Shared workbook**: point ProSE at a SharePoint/OneDrive-synced file (path
+    now editable in the dashboard) so it and a collaborator update one document;
+    a scan that finds the file locked is skipped/retried instead of littering a
+    copy.
+  - **Solicitation # column lock**: opt-in Excel sheet protection makes only the
+    dedup-key column read-only, preventing edits that would re-append rows as
+    "new".
+  - **Dual HANDS contacts**: capture both the Specifications Contact and the
+    Buyer (same cell, role-tagged, consistent order) instead of just one; names
+    normalized to Title Case.
+
 ## 2026-07-14
 
 ### Changed

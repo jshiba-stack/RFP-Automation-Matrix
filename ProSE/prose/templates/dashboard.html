@@ -61,6 +61,31 @@
           <div class="hint">Each keyword is searched against active (Released) HiePRO solicitations. {{ cfg.keywords | length }} configured.</div>
         </div>
 
+        <!-- Workbook -->
+        <div class="card full">
+          <h2>Workbook</h2>
+          <label for="spreadsheet_path">Spreadsheet file path</label>
+          <input type="text" id="spreadsheet_path" name="spreadsheet_path" value="{{ cfg.spreadsheet_path }}"
+                 placeholder="data\2026-2027 Scanned Professional Services.xlsx">
+          <div class="hint">Where scans are written. To share one file with a collaborator, point this at a
+            <b>SharePoint/OneDrive-synced</b> location (an absolute path like
+            <code>%USERPROFILE%\OneDrive - Org\RFP Library\...xlsx</code>). A relative path is stored under the app folder.</div>
+          <label class="check" style="margin-top:10px">
+            <input type="checkbox" name="shared_workbook" value="1" {{ 'checked' if cfg.shared_workbook }}>
+            Shared workbook (SharePoint / OneDrive)
+          </label>
+          <div class="hint">When on, a scan that finds the file <b>open/locked</b> (e.g. your collaborator is editing)
+            is <b>skipped</b> and retried next run &mdash; instead of dropping a timestamped copy into the shared folder.
+            Your collaborator's manual columns are always preserved across scans.</div>
+          <label class="check" style="margin-top:10px">
+            <input type="checkbox" name="protect_id" value="1" {{ 'checked' if cfg.protect_solicitation_column }}>
+            Lock the Solicitation&nbsp;# column (prevent edits)
+          </label>
+          <div class="hint">Turns on Excel <b>sheet protection</b> with only the Solicitation&nbsp;# column read-only &mdash;
+            every other column stays editable (and sorting, filtering &amp; formatting still work). This protects the key
+            ProSE matches rows on. No password; <i>Review &rarr; Unprotect Sheet</i> removes it if you ever need to.</div>
+        </div>
+
         <!-- Schedule 1: scan -->
         <div class="card">
           <h2>Schedule 1 &middot; Scan</h2>

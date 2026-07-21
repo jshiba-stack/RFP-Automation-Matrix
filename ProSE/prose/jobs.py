@@ -21,14 +21,23 @@ def run_scan(cfg: dict | None = None, log=print) -> dict:
     log(f"Scan started: {len(keywords)} keyword(s)")
     details = scanner.scan(keywords, log=log)
     path = config.spreadsheet_abspath(cfg)
-    result = spreadsheet.update_spreadsheet(path, details)
-    log(
-        f"Spreadsheet updated: {result['new']} new, {result['updated']} updated, "
-        f"{result['total_rows']} total rows"
+    result = spreadsheet.update_spreadsheet(
+        path, details,
+        skip_on_lock=bool(cfg.get("shared_workbook")),
+        protect_id=bool(cfg.get("protect_solicitation_column")),
     )
-    if result.get("diverted"):
-        log(f"NOTE: workbook was open/locked -- results saved to {result['saved_to']}. "
-            "Close Excel and re-run the scan to merge into the main file.")
+    if result.get("skipped_locked"):
+        log("NOTE: workbook is open/locked (shared library) -- scan NOT written "
+            "to avoid a conflict copy; the next scheduled scan will merge once "
+            "it's closed.")
+    else:
+        log(
+            f"Spreadsheet updated: {result['new']} new, {result['updated']} updated, "
+            f"{result['total_rows']} total rows"
+        )
+        if result.get("diverted"):
+            log(f"NOTE: workbook was open/locked -- results saved to {result['saved_to']}. "
+                "Close Excel and re-run the scan to merge into the main file.")
     config.update_state(
         last_scan=_now_iso(),
         last_scan_count=len(details),

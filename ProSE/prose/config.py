@@ -75,6 +75,15 @@ DEFAULT_CONFIG = {
         "smtp_port": 587,
     },
     "spreadsheet_path": "data/2026-2027 Scanned Professional Services.xlsx",
+    # When the workbook lives in a shared SharePoint/OneDrive-synced folder, set
+    # this True: a scan that finds the file locked/open will SKIP writing (and
+    # retry next run) instead of dropping a timestamped sibling into the shared
+    # library, which would clutter it and confuse the collaborator.
+    "shared_workbook": False,
+    # Lock the Solicitation # column via Excel sheet protection so a collaborator
+    # can't accidentally edit the key ProSE matches rows on. Every other column
+    # stays editable. Useful with a shared workbook.
+    "protect_solicitation_column": False,
     "timezone": "Pacific/Honolulu",
 }
 

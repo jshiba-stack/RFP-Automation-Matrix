@@ -36,10 +36,15 @@ def _run_in_thread(kind: str, func):
         try:
             if kind == "scan":
                 res = func()
-                msg = f"Scan complete: {res['new']} new, {res['updated']} updated."
-                if res.get("diverted"):
-                    msg += (f" Workbook was open in Excel — saved to "
-                            f"{res['saved_to']} instead; close Excel and re-scan to merge.")
+                if res.get("skipped_locked"):
+                    msg = ("Scan ran, but the workbook was open/locked — results were "
+                           "NOT saved (avoids a SharePoint/OneDrive conflict copy). "
+                           "Close the file; the next scan will merge.")
+                else:
+                    msg = f"Scan complete: {res['new']} new, {res['updated']} updated."
+                    if res.get("diverted"):
+                        msg += (f" Workbook was open in Excel — saved to "
+                                f"{res['saved_to']} instead; close Excel and re-scan to merge.")
             else:
                 info = func()
                 msg = f"Email sent to {', '.join(info['recipients'])}."
@@ -80,6 +85,13 @@ def save():
     # Keywords: one per line.
     keywords = [ln.strip() for ln in f.get("keywords", "").splitlines() if ln.strip()]
     cfg["keywords"] = keywords
+
+    # Workbook location + shared-library behavior.
+    path = f.get("spreadsheet_path", "").strip()
+    if path:
+        cfg["spreadsheet_path"] = path
+    cfg["shared_workbook"] = bool(f.get("shared_workbook"))
+    cfg["protect_solicitation_column"] = bool(f.get("protect_id"))
 
     # Schedule 1 (scan)
     scan_h, scan_m = _parse_time(f.get("scan_time"), 6, 0)

@@ -52,6 +52,24 @@ def _clean(value) -> str:
     return re.sub(r"\s+", " ", str(value)).strip() if value else ""
 
 
+def _title_name(name: str) -> str:
+    """Normalize a person's name to Title Case for a consistent-looking sheet.
+
+    HANDS returns names in wildly mixed conventions ('JANE DOE', 'john smith').
+    Each letter run is capitalized when it is entirely upper- or lower-case;
+    runs that are already mixed-case (e.g. 'McCarthy', 'DeLuca') are left
+    untouched so we don't degrade them. Handles hyphens/apostrophes (each part
+    cased: 'SMITH-JONES' -> 'Smith-Jones', "o'brien" -> "O'Brien").
+    """
+    def fix(match: re.Match) -> str:
+        word = match.group(0)
+        if word.isupper() or word.islower():
+            return word[:1].upper() + word[1:].lower()
+        return word
+
+    return re.sub(r"[A-Za-z]+", fix, name)
+
+
 def normalize_phone(value) -> str:
     """Standardize phone numbers to '808-555-1234' regardless of source format.
 
@@ -159,6 +177,34 @@ def search_keyword(session: requests.Session, keyword: str) -> list[dict]:
     return []  # pragma: no cover
 
 
+def _combine_contacts(opp: dict) -> tuple[str, str, str]:
+    """Combine a HANDS notice's two contacts into multi-line Name/Phone/Email.
+
+    HANDS notices carry both a **Specifications Contact** (``contact*`` — the SME
+    who owns the scope) and a **Buyer** (``buyer*`` — the procurement officer),
+    each a distinct person. We keep both, one per line, **specifications first
+    then buyer**, with the role in parentheses after each name. Only contacts
+    that are actually listed are included (a single-contact notice yields a
+    single line). The line order is identical across all three fields, so
+    Name/Phone/Email always line up row-for-row.
+    """
+    contacts = [
+        ("Specifications", opp.get("contactName"), opp.get("contactPhone"), opp.get("contactEmail")),
+        ("Buyer", opp.get("buyerName"), opp.get("buyerPhone"), opp.get("buyerEmail")),
+    ]
+    names: list[str] = []
+    phones: list[str] = []
+    emails: list[str] = []
+    for label, name, phone, email in contacts:
+        name, phone, email = _title_name(_clean(name)), _clean(phone), _clean(email)
+        if not (name or phone or email):
+            continue  # this contact isn't listed on the notice
+        names.append(f"{name} ({label})" if name else f"({label})")
+        phones.append(normalize_phone(phone) if phone else "")
+        emails.append(email)
+    return "\n".join(names), "\n".join(phones), "\n".join(emails)
+
+
 def fetch_hands_detail(session: requests.Session, opp_id) -> dict:
     """Fetch contact + key fields for a HANDS-native opportunity via the public
     ``api/opportunity?id=`` endpoint. Returns {} if the id isn't a HANDS notice
@@ -168,14 +214,14 @@ def fetch_hands_detail(session: requests.Session, opp_id) -> dict:
     opp = (resp.json().get("data") or {}).get("opportunity")
     if not opp:
         return {}
+    name, phone, email = _combine_contacts(opp)
     return {
         "organization": _clean(opp.get("department")),
         "published": _clean(opp.get("publishedDate")),
         "due_date": _clean(opp.get("dueDate")),
-        # Prefer the explicit Contact, fall back to the Buyer.
-        "contact_name": _clean(opp.get("contactName") or opp.get("buyerName")),
-        "phone": _clean(opp.get("contactPhone") or opp.get("buyerPhone")),
-        "email": _clean(opp.get("contactEmail") or opp.get("buyerEmail")),
+        "contact_name": name,
+        "phone": phone,
+        "email": email,
     }
 
 
@@ -237,6 +283,10 @@ def scan(keywords: list[str], log=print) -> list[dict]:
                         rec[field] = value
         except Exception as exc:  # noqa: BLE001
             log(f"    ! detail fetch failed for {number} (keeping search fields): {exc}")
-        rec["phone"] = normalize_phone(rec.get("phone"))
+        # HANDS dual-contact rows carry a multi-line phone already normalized
+        # per line — don't run it back through the single-number normalizer
+        # (which collapses newlines). Single-line phones still get normalized.
+        phone_val = rec.get("phone") or ""
+        rec["phone"] = phone_val if "\n" in phone_val else normalize_phone(phone_val)
 
     return list(seen.values())

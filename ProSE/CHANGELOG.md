@@ -4,6 +4,38 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-07-21
+
+Shared-workbook collaboration: point ProSE at a SharePoint/OneDrive file that a
+collaborator co-owns, guard the matching key, and capture both HANDS contacts.
+
+### Added
+- **Shared-workbook mode** (`shared_workbook`, dashboard → Workbook card). When
+  on, a scan that finds the file open/locked (a collaborator editing it) is
+  **skipped and retried next run** instead of dropping a timestamped sibling
+  into the shared library. Scans re-query the source every run, so nothing is
+  lost. The **workbook file path is now editable in the dashboard** (was
+  config-only), so it can be pointed at a synced SharePoint/OneDrive location.
+- **Solicitation # column lock** (`protect_solicitation_column`, dashboard
+  toggle). Turns on Excel sheet protection with **only column B read-only** —
+  every other column stays editable, and sorting/filtering/formatting still
+  work. Prevents a collaborator from accidentally editing the key ProSE dedups
+  on (which would cause a solicitation to re-append as "new"). Re-applied every
+  run; openpyxl writes through protection so scans still refresh the column.
+- **Dual-contact capture for HANDS notices.** HANDS notices carry both a
+  **Specifications Contact** (the SME) and a **Buyer** (procurement officer);
+  ProSE previously kept only one. It now records **both in the same cell**, one
+  per line — specifications first, buyer second, each name tagged with its role
+  — consistently across Name/Phone/Email. Single-contact notices yield a single
+  line. Same-cell (not a new row) so dedup + expiry checkers are unaffected. The
+  Phone column now wraps so both lines show.
+- **Contact name casing** normalized to Title Case (`JANE DOE` / `john smith` →
+  `Jane Doe` / `John Smith`); already-mixed-case names (`McCarthy`, `DeLuca`)
+  are preserved, hyphens/apostrophes handled, emails left untouched.
+
+### Notes
+- All new toggles default **off**, so existing single-user setups are unchanged.
+
 ## [0.3.0] — 2026-07-14
 
 Spreadsheet workflow upgrades: keyword provenance, expiry handling, and
