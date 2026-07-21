@@ -18,6 +18,11 @@ load only the context needed for the current task.
 | Sessions | `sessions/` | Chronological handoffs describing work performed and remaining |
 | Audits | `audits/` | Point-in-time reviews, findings, evidence, and recommendations |
 | Runbooks | `runbooks/` | Repeatable setup, deployment, recovery, and operational procedures |
+| Highlights | `highlights/` | Public, sanitized career artifacts: engineering case studies, resume bullets, and a skills matrix |
+
+The first seven rows are internal memory. `highlights/` is a derived,
+outward-facing layer curated from that memory for recruiters and interviewers;
+it is public and sanitized, unlike the private `sessions/` and `audits/` notes.
 
 This maps to four practical forms of memory:
 
