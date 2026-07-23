@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## 2026-07-23
 
 ### Changed
+- **ProPosal v0.16.1 → v0.16.2** — dead-code cleanup (four functions with no
+  callers), no behaviour change; see [ProPosal/CHANGELOG.md](ProPosal/CHANGELOG.md).
+- **Career layer split per program.** `docs/highlights/` now holds
+  `prose/` and `proposal/` subfolders, each with its own case studies, resume
+  bullets, and skills matrix, so one program's material can be handed over on its
+  own. Suite-level bullets and the shared rules moved to the highlights index.
+  Two ProSE case studies added (the de-duplication key mutated by a later
+  pipeline stage; the concurrency guard whose premise was false for cloud-synced
+  files).
+- **README refreshed** — ProSE was advertised at v0.2.1 with a description
+  predating the Keyword column, expiry handling, and shared-workbook
+  collaboration; `docs/` added to the repository layout.
 - **ProSE v0.4.0 → v0.5.0** — row-level correctness and shared-library
   robustness; see [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md):
   - **De-duplication hardened**: the search-side solicitation number is now the

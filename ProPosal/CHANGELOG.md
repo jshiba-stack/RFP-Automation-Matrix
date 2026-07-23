@@ -4,6 +4,31 @@ All notable changes to **ProPosal** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.16.2] — 2026-07-23
+
+Dead-code cleanup. No behaviour change.
+
+### Removed
+- Four functions with no callers anywhere in the package, its templates, or its
+  tests, found by an AST scan of every top-level definition against all usages:
+  - `resumes._person_matches_file` — a thin boolean wrapper over
+    `_match_strength`, superseded by `_path_strength` (which also matches on the
+    containing folder name).
+  - `discovery.detect_onedrive` — `detect_sources` reads the OneDrive
+    environment variables directly.
+  - `docx_map.find_past_performance_clients` — superseded by the
+    signature-based table finders.
+  - `datastore.projects_by_match` — row matching moved elsewhere.
+
+### Notes
+- Test suite: 124 passed before and after the removal; a re-run of the scan
+  reports zero unused definitions across both programs.
+- Known deprecation (not yet addressed): `pdfutil` calls `compress_identical_objects`
+  with `remove_orphans`, which pypdf deprecates and removes in 7.0. The
+  replacement is `remove_unreferenced`; it changes PDF-assembly behaviour, so it
+  is deliberately left for a change with its own verification rather than folded
+  into a cleanup.
+
 ## [0.16.1] — 2026-07-08
 
 Dashboard step-numbering consistency fix.
