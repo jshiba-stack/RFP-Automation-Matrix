@@ -5,6 +5,27 @@ Each program keeps its own detailed changelog in its folder.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-07-23
+
+### Changed
+- **ProSE v0.4.0 → v0.5.0** — row-level correctness and shared-library
+  robustness; see [ProSE/CHANGELOG.md](ProSE/CHANGELOG.md):
+  - **De-duplication hardened**: the search-side solicitation number is now the
+    only key and is never overwritten by a detail fetch (which appends an
+    amendment suffix), so an amended solicitation stops appending a new row each
+    time. Pre-existing duplicates collapse on the next merge, keeping manual
+    column values from both copies.
+  - **Contacts de-duplicated**: a notice listing one person in both roles is
+    recorded once, with the role tag dropped whenever there is only one line.
+  - **Rows auto-fit** to their Organization/Contact/Email content, and a cell
+    taller than its row is top-aligned so overflow clips at the bottom instead of
+    rendering as a band through the middle of the letters in the browser view.
+  - **Stale-lock failsafe**: an `~$` owner file left by an Excel crash is
+    detected and cleared automatically, and the shared-workbook lock guard now
+    actually fires for co-authored files (which take no exclusive OS lock).
+  - **HTML entities and markup** from the search API are decoded/stripped in all
+    fields rather than only the title.
+
 ## 2026-07-21
 
 ### Changed

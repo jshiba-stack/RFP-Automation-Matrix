@@ -18,6 +18,7 @@ detail fetch fails we still keep the 5 fields HANDS gave us (graceful degrade).
 
 from __future__ import annotations
 
+import html
 import re
 import time
 
@@ -35,6 +36,10 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 ProSE/0.1"
 )
 
+# The field solicitations are de-duplicated on. It is set once, from the HANDS
+# search result, and never overwritten by a detail fetch (see scan()).
+KEY_FIELD = "solicitation_number"
+
 TIMEOUT = 45
 RETRIES = 3
 RETRY_BACKOFF = 5     # seconds * attempt, between retries
@@ -45,11 +50,19 @@ _TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _strip_html(text: str) -> str:
-    return re.sub(r"\s+", " ", _TAG_RE.sub("", text or "")).strip()
+    """Drop tags, then decode HTML entities.
+
+    HANDS returns HTML-escaped text, so an apostrophe arrives as ``&#x27;`` and a
+    slash as ``&#x2F;``. Without the unescape those land in the spreadsheet
+    literally. Entities are decoded *after* tag removal so an escaped angle
+    bracket survives as text instead of being mistaken for markup.
+    """
+    return re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub("", text or ""))).strip()
 
 
 def _clean(value) -> str:
-    return re.sub(r"\s+", " ", str(value)).strip() if value else ""
+    """Collapse whitespace and decode HTML entities (e.g. ``O&#x27;Brien``)."""
+    return re.sub(r"\s+", " ", html.unescape(str(value))).strip() if value else ""
 
 
 def _title_name(name: str) -> str:
@@ -132,12 +145,18 @@ def _search_body(keyword: str) -> dict:
 
 
 def _hands_to_record(item: dict) -> dict:
-    """Map a HANDS result object to our field dict (5 of 8 fields + rfid)."""
-    number = str(item.get("solicitionNo") or "").strip()  # note: HANDS' spelling
+    """Map a HANDS result object to our field dict (5 of 8 fields + rfid).
+
+    Every text field is HTML-stripped: HANDS wraps the matched substring in
+    ``<span class="highlight">`` in *whichever* field the query hit, including
+    the solicitation number and department. Left in, that markup would become
+    part of the dedup key and spawn a bogus duplicate row.
+    """
+    number = _strip_html(item.get("solicitionNo"))  # note: HANDS' spelling
     rfid = str(item.get("id") or parser.rfid_from_number(number)).strip()
     return {
         "solicitation_number": number,
-        "organization": item.get("department") or "",
+        "organization": _strip_html(item.get("department")),
         "title": _strip_html(item.get("title")),
         "published": item.get("publishDate") or "",
         "due_date": item.get("dueDate") or "",
@@ -181,26 +200,51 @@ def _combine_contacts(opp: dict) -> tuple[str, str, str]:
     """Combine a HANDS notice's two contacts into multi-line Name/Phone/Email.
 
     HANDS notices carry both a **Specifications Contact** (``contact*`` — the SME
-    who owns the scope) and a **Buyer** (``buyer*`` — the procurement officer),
-    each a distinct person. We keep both, one per line, **specifications first
-    then buyer**, with the role in parentheses after each name. Only contacts
-    that are actually listed are included (a single-contact notice yields a
-    single line). The line order is identical across all three fields, so
-    Name/Phone/Email always line up row-for-row.
+    who owns the scope) and a **Buyer** (``buyer*`` — the procurement officer).
+    They are often, but not always, different people. We keep every *distinct*
+    contact, one per line, **specifications first then buyer**. The line order is
+    identical across all three fields, so Name/Phone/Email always line up
+    row-for-row.
+
+    Two cases collapse to a single un-labelled line:
+      * the notice lists only one contact, and
+      * both roles resolve to the same person (same name + phone + email, e.g.
+        a shared purchasing desk) — very common for county notices.
+
+    The ``(Specifications)`` / ``(Buyer)`` role tag is only added when there are
+    genuinely two lines to tell apart; with one line it is noise that also
+    squeezes the Contact Name column.
     """
-    contacts = [
+    listed = [
         ("Specifications", opp.get("contactName"), opp.get("contactPhone"), opp.get("contactEmail")),
         ("Buyer", opp.get("buyerName"), opp.get("buyerPhone"), opp.get("buyerEmail")),
     ]
+    contacts: list[tuple[str, str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for label, name, phone, email in listed:
+        name = _title_name(_clean(name))
+        phone = normalize_phone(phone) if _clean(phone) else ""
+        email = _clean(email)
+        if not (name or phone or email):
+            continue  # this contact isn't listed on the notice
+        # Compare on normalized values so formatting differences between the two
+        # HANDS fields ("(808) 555-1234" vs "808-555-1234") still count as equal.
+        signature = (name.lower(), re.sub(r"\D", "", phone), email.lower())
+        if signature in seen:
+            continue  # same person in both roles — record them once
+        seen.add(signature)
+        contacts.append((label, name, phone, email))
+
+    tag_roles = len(contacts) > 1
     names: list[str] = []
     phones: list[str] = []
     emails: list[str] = []
     for label, name, phone, email in contacts:
-        name, phone, email = _title_name(_clean(name)), _clean(phone), _clean(email)
-        if not (name or phone or email):
-            continue  # this contact isn't listed on the notice
-        names.append(f"{name} ({label})" if name else f"({label})")
-        phones.append(normalize_phone(phone) if phone else "")
+        if tag_roles:
+            names.append(f"{name} ({label})" if name else f"({label})")
+        else:
+            names.append(name)
+        phones.append(phone)
         emails.append(email)
     return "\n".join(names), "\n".join(phones), "\n".join(emails)
 
@@ -274,6 +318,14 @@ def scan(keywords: list[str], log=print) -> list[dict]:
             if is_hiepro:
                 detail = parser.fetch_detail(detail_session, number)
                 for field in parser.FIELDS:
+                    # NEVER let the detail page rewrite the solicitation number:
+                    # HiePRO renders it with an amendment suffix ("P27000054
+                    # version: 01") that changes on every amendment. Since dedup
+                    # already happened on the HANDS number, overwriting it here
+                    # produced a second row for the same solicitation on every
+                    # version bump. The HANDS number is the stable key.
+                    if field == KEY_FIELD:
+                        continue
                     if detail.get(field):  # authoritative; keep HANDS as fallback
                         rec[field] = detail[field]
             else:

@@ -4,6 +4,84 @@ All notable changes to **ProSE** are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-07-23
+
+Row-level correctness and shared-library robustness: de-duplication hardened,
+contacts de-duplicated, rows sized to their content, and the lock guard made to
+actually fire.
+
+### Added
+- **Row auto-fit.** Every data row's height is computed from its Organization,
+  Contact Name and Email cells against the *live* column widths — the library
+  equivalent of double-clicking the row border, which Excel never does for rows
+  written by a program. Deliberately not measured against Solicitation Title:
+  fitting a long title makes every row tall and the sheet reads as empty space.
+  Capped so one pathological cell can't take over the screen.
+- **Conditional top alignment.** A wrapped cell whose text is taller than its row
+  switches from centred to top-aligned so the overflow is clipped at the bottom
+  only; cells that fit stay centred. Desktop Excel anchors overflow to the top
+  while Excel Online/SharePoint honours centring literally and clips top *and*
+  bottom, showing a band through the middle of the letters. Vertical alignment is
+  the only property that controls this (`shrinkToFit` is ignored when `wrapText`
+  is on), so the fix is per-cell rather than a column-wide setting.
+- **Stale-lock failsafe.** `excel_lock_state()` classifies the workbook
+  **free / open / stale** by testing whether any process still holds the workbook
+  *or* its `~$` owner file (Windows denies sharing on both while Excel is open).
+  A stale owner file — the leftover from an Excel crash, which would otherwise
+  make every future scan skip forever — is deleted automatically before each
+  write, in both local and shared mode, and reported in the log and banner.
+  Deletion only ever touches a file no process holds, so it cannot disarm a live
+  session.
+- **Self-healing of existing rows** on every merge: duplicate rows collapse,
+  same-person dual contacts fold to one line, and HTML entities decode. Rows for
+  closed solicitations are never refreshed by a scan, so without this they would
+  keep their original defects indefinitely.
+
+### Fixed
+- **Duplicate rows for one solicitation.** The HiePRO detail page returns the
+  number with an amendment suffix (`"<number> version: 01"`), and the scan
+  overwrote the de-dup key with it *after* de-duplication had already run — so
+  every amendment appended a fresh row. The HANDS number is now the sole key and
+  is never overwritten by a detail fetch. Pre-existing duplicates collapse on the
+  next merge (keys normalised: markup stripped, amendment suffix removed,
+  case-folded), with manual-column values folded in from *both* copies so nothing
+  the user typed is lost regardless of which row carried it.
+- **Markup leaking into the row key.** HANDS wraps the matched substring in
+  `<span class="highlight">` in *whichever* field the query hit, including the
+  solicitation number itself; only the title was being stripped, so that markup
+  could become part of the key and spawn another duplicate. All text fields are
+  stripped now.
+- **The same person written twice.** When a notice lists one contact as both
+  Specifications Contact and Buyer (common for a shared purchasing desk), both
+  lines were recorded. Contacts are now compared on normalised values, so
+  formatting differences between the two fields count as equal, and a single
+  contact is written **once with no role tag** — the `(Specifications)`/`(Buyer)`
+  tags appear only when there are genuinely two lines to tell apart.
+- **HTML entities in cell text.** HANDS returns escaped text, so an apostrophe
+  arrived as `&#x27;` and a slash as `&#x2F;`. Entities are decoded on the way in
+  (after tag removal, so escaped angle brackets survive as text) and self-healed
+  in ProSE-owned cells of older rows — never in the user's manual columns, where
+  a literal `&amp;` may be intentional.
+- **The shared-workbook lock guard never fired.** It relied on the save failing
+  with a permission error, but a OneDrive/SharePoint file open with AutoSave
+  co-authors through the sync client and takes **no exclusive OS lock**, so scans
+  wrote silently into an open workbook. Detection now also checks Excel's `~$`
+  owner file.
+- **Row-height estimate over-counted long tokens**, charging a word that lands at
+  the start of an empty line for a line break it did not need (a 35-character
+  email in a 30-character column measured 3 lines instead of 2).
+
+### Notes
+- `~$` owner files are excluded from OneDrive/SharePoint sync, so the lock guard
+  sees only the **local** Excel session. A remote co-author's open file is not
+  detectable from the filesystem.
+- **Deferred — post-scan sync verification.** A stale sign-in silently parks
+  OneDrive uploads while ProSE still reports "scan complete" (observed this
+  session: writes stopped reaching the library for ~2 hours until the account
+  re-authenticated). A check that the workbook actually reached the library is
+  the next safeguard; uploading via the Graph API instead of the sync client is
+  the larger alternative.
+
 ## [0.4.0] — 2026-07-21
 
 Shared-workbook collaboration: point ProSE at a SharePoint/OneDrive file that a

@@ -37,11 +37,15 @@ def _run_in_thread(kind: str, func):
             if kind == "scan":
                 res = func()
                 if res.get("skipped_locked"):
-                    msg = ("Scan ran, but the workbook was open/locked — results were "
+                    msg = ("Scan ran, but the workbook is open in Excel — results were "
                            "NOT saved (avoids a SharePoint/OneDrive conflict copy). "
                            "Close the file; the next scan will merge.")
                 else:
                     msg = f"Scan complete: {res['new']} new, {res['updated']} updated."
+                    if res.get("duplicates_removed"):
+                        msg += f" Collapsed {res['duplicates_removed']} duplicate row(s)."
+                    if res.get("stale_lock_cleared"):
+                        msg += " Cleared a leftover Excel lock file first."
                     if res.get("diverted"):
                         msg += (f" Workbook was open in Excel — saved to "
                                 f"{res['saved_to']} instead; close Excel and re-scan to merge.")

@@ -26,8 +26,11 @@ def run_scan(cfg: dict | None = None, log=print) -> dict:
         skip_on_lock=bool(cfg.get("shared_workbook")),
         protect_id=bool(cfg.get("protect_solicitation_column")),
     )
+    if result.get("stale_lock_cleared"):
+        log("NOTE: removed a leftover Excel lock file (~$...) that no program was "
+            "using -- Excel was probably closed uncleanly. Scan continued normally.")
     if result.get("skipped_locked"):
-        log("NOTE: workbook is open/locked (shared library) -- scan NOT written "
+        log("NOTE: workbook is open in Excel (shared library) -- scan NOT written "
             "to avoid a conflict copy; the next scheduled scan will merge once "
             "it's closed.")
     else:
@@ -35,6 +38,15 @@ def run_scan(cfg: dict | None = None, log=print) -> dict:
             f"Spreadsheet updated: {result['new']} new, {result['updated']} updated, "
             f"{result['total_rows']} total rows"
         )
+        if result.get("duplicates_removed"):
+            log(f"  collapsed {result['duplicates_removed']} duplicate row(s) "
+                "(same solicitation stored under an amendment/variant number)")
+        if result.get("entities_decoded"):
+            log(f"  decoded HTML entities (&#x27; etc.) in {result['entities_decoded']} "
+                "older row(s)")
+        if result.get("contacts_collapsed"):
+            log(f"  tidied {result['contacts_collapsed']} older row(s) that listed "
+                "the same contact twice")
         if result.get("diverted"):
             log(f"NOTE: workbook was open/locked -- results saved to {result['saved_to']}. "
                 "Close Excel and re-run the scan to merge into the main file.")
