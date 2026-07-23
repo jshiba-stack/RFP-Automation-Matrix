@@ -20,20 +20,6 @@ _SKIP_DIRS = {".venv", "__pycache__", "node_modules", ".git", "output", "instanc
 _KIND_ORDER = {"signed": 0, "final": 1, "draft": 2, "master": 3, "other": 4, "template": 5}
 
 
-def detect_onedrive() -> Path | None:
-    """Best-effort path to the local OneDrive folder, if any."""
-    for var in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
-        v = os.environ.get(var)
-        if v and Path(v).is_dir():
-            return Path(v)
-    home = Path.home()
-    for name in ("OneDrive", "OneDrive - Personal"):
-        p = home / name
-        if p.is_dir():
-            return p
-    return None
-
-
 def detect_sources() -> list[dict]:
     """Suggest candidate materials folders (NOT saved or selected automatically).
 

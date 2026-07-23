@@ -126,18 +126,6 @@ def find_capacity_table(doc: _Doc) -> Table | None:
     return matches[0] if matches else None
 
 
-def find_past_performance_clients(doc: _Doc) -> dict[str, Table]:
-    """Map client-name -> table for each 2-column 'Client' past-performance block."""
-    out = {}
-    for t in doc.tables:
-        sig = _table_signature(t)
-        if len(sig) == 2 and sig[0] == SIG_PASTPERF_FIRST_CELL:
-            # header second cell holds the client name (may contain newlines)
-            client = t.rows[0].cells[1].text.strip()
-            out[client] = t
-    return out
-
-
 def footer_paragraphs(doc: _Doc):
     """Yield (paragraph, section_index) for every footer paragraph."""
     for si, sec in enumerate(doc.sections):

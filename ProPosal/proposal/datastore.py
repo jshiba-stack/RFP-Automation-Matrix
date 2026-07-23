@@ -58,15 +58,3 @@ def load(paths) -> dict:
         if Path(p).exists():
             store = _deep_merge(store, _load_one(p))
     return store
-
-
-def projects_by_match(store: dict) -> dict:
-    """Index projects by a normalized (client, project) key for row matching."""
-    out = {}
-    for proj in store.get("projects", []):
-        key = (
-            str(proj.get("client", "")).strip().lower(),
-            str(proj.get("project", "")).strip().lower(),
-        )
-        out[key] = proj
-    return out

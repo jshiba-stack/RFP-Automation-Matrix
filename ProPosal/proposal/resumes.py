@@ -67,10 +67,6 @@ def _match_strength(name: str, stem: str) -> int:
     return 0
 
 
-def _person_matches_file(name: str, stem: str) -> bool:
-    return _match_strength(name, stem) > 0
-
-
 def _path_strength(name: str, path: Path, root: Path) -> int:
     """Strongest match across the file name AND its containing folder names
     (per-person folders: 'Jordan Avery/Resume 2024.docx' matches by folder)."""
