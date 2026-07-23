@@ -18,7 +18,7 @@ load only the context needed for the current task.
 | Sessions | `sessions/` | Chronological handoffs describing work performed and remaining |
 | Audits | `audits/` | Point-in-time reviews, findings, evidence, and recommendations |
 | Runbooks | `runbooks/` | Repeatable setup, deployment, recovery, and operational procedures |
-| Highlights | `highlights/` | Public, sanitized career artifacts: engineering case studies, resume bullets, and a skills matrix |
+| Highlights | `highlights/` | Public, sanitized career artifacts, split per program (`highlights/prose/`, `highlights/proposal/`): engineering case studies, resume bullets, and a skills matrix |
 
 The first seven rows are internal memory. `highlights/` is a derived,
 outward-facing layer curated from that memory for recruiters and interviewers;

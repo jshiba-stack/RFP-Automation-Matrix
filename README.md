@@ -13,7 +13,7 @@ opportunities.
 
 | Program | What it does | Status |
 |---------|--------------|--------|
-| [**ProSE**](ProSE/) — Professional Services Extractor | Scans Hawaii procurement sources (HANDS + HiePRO) for active solicitations matching your keywords, records them into a styled Excel spreadsheet with full contact details, and emails it on a schedule. Includes a local web dashboard. | ✅ v0.2.1 |
+| [**ProSE**](ProSE/) — Professional Services Extractor | Scans Hawaii procurement sources (HANDS + HiePRO) for active solicitations matching your keywords, records them into a styled Excel spreadsheet with full contact details, and emails it on a schedule. Each row records the keyword(s) it matched; expired solicitations are struck through and sunk to the bottom; rows auto-fit their contents; and your own cell borders and column widths survive every scan. Runs as a **shared workbook** on a synced SharePoint/OneDrive folder so the tool and a human collaborator maintain one document: only the data columns are refreshed, the action columns are never touched, rows de-duplicate on a stable key (immune to amendment suffixes), the key column can be locked against accidental edits, and a scan skips rather than fighting a file someone has open. Local web dashboard plus OS-level scheduling. | ✅ v0.5.0 |
 | [**ProPosal**](ProPosal/) — Professional Services Proposal Builder | Builds the City & County of Honolulu annual submittal end-to-end. Import Sections I–IV from any previous FINAL `.docx` into dashboard editors, edit/reorder there, then Build syncs the content back (preserving formatting, or a strict rebuild) and **assembles the deliverable PDF** — Word-exported body plus each person's one-page resume PDF in order. Auto-refreshes fiscal year / dates, classifies Section I against the current-year DIT taxonomy, enforces document-wide table / pagination / letterhead / resume-typography standards, lints and (optionally) re-typesets damaged resume pages, runs a compliance checklist + format check, and validates against the City's annual notice PDF. Local web dashboard, plus a PDF form-fill framework (DPW-120 today; SF330 pending a fillable template). | 🚧 v0.16.1 |
 | _(more to come)_ | | |
 
@@ -63,6 +63,10 @@ RFP Automation Matrix/
 ├── README.md            ← this file (suite overview)
 ├── CHANGELOG.md         ← suite-level milestones (programs added/retired)
 ├── LICENSE              ← MIT
+├── docs/                ← project context, decisions, plans, reference
+│   ├── context/         ← current-state (what is true now)
+│   ├── decisions/       ← accepted decisions + rationale
+│   └── highlights/      ← public career layer (case studies per program)
 ├── ProSE/               ← Professional Services Extractor
 │   ├── README.md
 │   ├── CHANGELOG.md
@@ -72,6 +76,9 @@ RFP Automation Matrix/
     ├── CHANGELOG.md
     └── …
 ```
+
+Working notes (`docs/sessions/`, `docs/audits/`) stay local and are git-ignored,
+so nothing containing real contact or client data reaches this public repo.
 
 ## License
 

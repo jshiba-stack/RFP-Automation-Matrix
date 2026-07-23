@@ -1,9 +1,12 @@
-# Engineering Case Studies: RFP Automation Matrix
+# Engineering Case Studies: ProPosal (Professional Services Proposal Builder)
 
-Curated, sanitized narratives of the hardest problems solved in this suite. Each
-is written STAR-style (Situation, Task, Action, Result) in the author-owned voice
-described in the [highlights README](README.md). Metrics are marked `(measured)`
-or `(est.)`. No real client, firm, or personnel data appears here.
+Curated, sanitized narratives of the hardest problems solved in **ProPosal**, the
+builder that assembles the annual professional-services submittal end to end.
+Written STAR-style (Situation, Task, Action, Result) in the author-owned voice
+described in the [highlights README](../README.md). Metrics are marked
+`(measured)` or `(est.)`. No real client, firm, or personnel data appears here.
+
+For the extraction program, see [ProSE case studies](../prose/case-studies.md).
 
 ---
 
@@ -44,7 +47,7 @@ additional non-uniform files no one had noticed.
 **Demonstrates:** measure-before-fixing discipline, low-level PDF and document
 engineering, designing for graceful degradation, test coverage on a public repo.
 
-**Evidence:** [decision record](../decisions/2026-07-08-01-resume-and-letterhead-standardization.md),
+**Evidence:** [decision record](../../decisions/2026-07-08-01-resume-and-letterhead-standardization.md),
 `ProPosal/proposal/pdfutil.py`, `ProPosal/proposal/resume_rebuild.py`.
 
 ---
@@ -82,7 +85,7 @@ the committed code carries no real data.
 **Demonstrates:** treating a document as a programmable artifact, calibration
 against real output, public-repo hygiene, defensive fallbacks.
 
-**Evidence:** [decision record](../decisions/2026-07-08-01-resume-and-letterhead-standardization.md),
+**Evidence:** [decision record](../../decisions/2026-07-08-01-resume-and-letterhead-standardization.md),
 `ProPosal/proposal/proofread.py`, `ProPosal/proposal/pdfutil.py`.
 
 ---
@@ -120,42 +123,3 @@ privacy-by-default architecture, knowing when not to call a model.
 
 **Evidence:** `ProPosal/proposal/skills.py`, `ProPosal/proposal/dit_taxonomy.py`,
 `ProPosal/proposal/llm/`.
-
----
-
-## 4. Automation that runs safely alongside a human collaborator
-
-**Situation.** A scanning tool refreshes a shared Excel workbook of procurement
-opportunities on a schedule. The same workbook is edited by hand: a collaborator
-fills in status and action columns, applies their own cell borders, and adjusts
-column widths. Naive automation would either overwrite that human work or corrupt
-the file when both parties touched it at once.
-
-**Task.** Let the automated refresh and a human collaborator share one workbook as
-a single source of truth, without the machine ever destroying the human's work or
-producing duplicate rows.
-
-**Action.** I designed the refresh to be strictly non-destructive: it fills only
-the data columns, never touches the human's action columns, and deduplicates by a
-stable solicitation key so a re-seen opportunity updates in place instead of
-appending a copy. To survive concurrent editing on a synced drive, I added a
-shared-workbook mode that skips and retries a scan when the file is locked open,
-rather than dropping a sibling copy into the shared folder. I preserved the
-collaborator's own cell borders and column widths across every scan and extended
-them to new rows, and added an opt-in lock on just the dedup-key column through
-sheet protection, so the key that prevents duplicates cannot be edited by
-accident.
-
-**Result.** The tool and a human now edit one document safely. Human formatting
-and action columns survive every refresh, duplicates collapse, and a locked file
-no longer produces a lost scan or a litter of copies.
-
-- Human action columns and formatting preserved across every scan `(measured)`
-- Duplicate rows collapsed by stable key; lock-aware scan skips and retries `(measured)`
-- Replaces about 2 hours of manual portal-checking and data entry per scan, run unattended `(est.)`
-- Runs with zero LLM inference (deterministic extraction), avoiding roughly 70,000 tokens of model processing per scan (about 480,000 per week) `(est.; basis in resume-bullets.md)`
-
-**Demonstrates:** building automation around a human workflow, concurrency and
-data-integrity thinking, treating the user's work as a first-class constraint.
-
-**Evidence:** [ProSE README](../../ProSE/README.md), [ProSE CHANGELOG](../../ProSE/CHANGELOG.md).
