@@ -11,6 +11,7 @@ For the extraction program, see [ProSE skills matrix](../prose/skills-matrix.md)
 | --- | --- | --- |
 | Root-cause debugging | Diagnosed elongated PDF text as an editor re-save via per-run scale matrices, after clearing the assumed cause by measurement | "Tell me about a hard bug." |
 | Document and PDF engineering | Page-level assembly, glyph-scale linting, template-driven rebuild, header restamping through Word | "Have you worked with a messy real-world format?" |
+| Verifying against ground truth | Reverse-engineered a deliverable's real format with a page-for-page comparison loop against a reference, converging output to 21 of 21 pages and reversing a wrong assembly architecture | "How do you know your output is actually correct?" |
 | Designing for graceful degradation | Optional local LLM behind a deterministic fallback; damaged resumes self-heal or are flagged, never ship silently | "How do you handle unreliable inputs or dependencies?" |
 | Pragmatic AI integration | Model is opt-in and off by default; default path is free, offline, and private | "When would you not use an LLM?" |
 | Test discipline | 100-plus tests on fictional data in a public repo; outputs verified page-for-page | "How do you know your code works?" |

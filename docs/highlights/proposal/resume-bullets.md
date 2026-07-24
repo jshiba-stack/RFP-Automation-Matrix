@@ -17,9 +17,13 @@ For suite-level bullets and summary lines, see the
 - Root-caused a document-rendering defect by analyzing PDF glyph-scale matrices,
   disproving the assumed cause, and shipped a lint-and-rebuild pipeline that
   standardizes malformed source files automatically.
+- Reverse-engineered a deliverable's true format by comparing output page-for-page
+  against a ground-truth reference in a verification loop, discovering the resume
+  pages were PDF-only and re-architecting assembly from Word-merge to PDF-level
+  (an entire dependency removed) `(measured)`.
 - Built a PDF assembly pipeline that merges a Word-exported body with per-person
-  resume pages and verified the output page-for-page against a reference, 21 of 21
-  pages identical `(measured)`.
+  resume pages and converged the output to the reference, 21 of 21 pages identical
+  `(measured)`.
 - Designed a build-time proofread pass that enforces one document-wide standard
   for tables, pagination, and header blocks across files from many sources, with
   no firm data hardcoded into a public repo.

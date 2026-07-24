@@ -10,7 +10,51 @@ For the extraction program, see [ProSE case studies](../prose/case-studies.md).
 
 ---
 
-## 1. Root-causing "stretched" text in an assembled PDF deliverable
+## 1. Reverse-engineering a deliverable's real format with a verification loop
+
+**Situation.** The submittal's Appendix must carry one resume page per team
+member. The first build appended each person's resume from a Word file into the
+proposal document, and the output's formatting came out completely wrong: it did
+not resemble the real deliverable the firm actually ships.
+
+**Task.** Determine what the finished deliverable genuinely is, then make the
+build reproduce it exactly instead of guessing at styling fixes.
+
+**Action.** Rather than keep tuning the merge styling, I ran a verification loop
+against a ground-truth reference: I compared our output page-for-page against the
+firm's historical deliverables, drafts and final, and re-ran that comparison after
+every change. The comparison exposed the real cause. Every reference Word file
+ends at the "Appendix" heading, which meant the resume pages never lived in the
+Word document at all: they exist only in the delivered PDF, each one the person's
+own PDF export (their individual page footers were visible in the reference).
+Appending Word files was therefore the wrong mechanism outright, and it was
+actively harmful, because the proposal's own styles collided by name and the
+master document re-styled every resume. I re-architected assembly to the PDF
+level: export the body through Word, then merge each person's one-page resume PDF
+in section order with a PDF library, with no re-rendering of anyone's page. I kept
+running the same page-for-page loop until the assembled output matched the
+reference exactly, which is also what let me retire the Word-merge dependency with
+confidence.
+
+**Result.** The assembled deliverable converged to match the reference
+page-for-page. Because the pages are the source PDFs themselves, nothing is
+re-rendered and the format is reproduced rather than approximated. The discovery
+reversed the assembly architecture and let an entire dependency be removed.
+
+- Output converged to the reference deliverable page-for-page: equal page count (21 of 21), identical resume pages, people, and order `(measured)`
+- Root cause found by inspection, not assumption: reference Word files end at the Appendix heading, so resumes are PDF-only `(measured)`
+- Word-merge dependency (`docxcompose`) removed once the loop confirmed the new path `(measured)`
+
+**Demonstrates:** verifying against ground truth, iterative convergence loops,
+rejecting a wrong architecture early, PDF and document pipeline engineering.
+
+**Evidence:** [decision record](../../decisions/2026-07-04-01-pdf-level-submittal-assembly.md),
+`ProPosal/proposal/jobs.py` (`_assemble_submittal`), `ProPosal/proposal/pdfutil.py`,
+`ProPosal/proposal/resumes.py`.
+
+---
+
+## 2. Root-causing "stretched" text in an assembled PDF deliverable
 
 **Situation.** The proposal builder assembles a final PDF from a Word-exported
 body plus each team member's one-page resume PDF. Some pages rendered with text
@@ -41,7 +85,7 @@ deliverable carries one typographic standard. The linter immediately surfaced
 additional non-uniform files no one had noticed.
 
 - Text stretch detected via per-run scale matrices at a 5% deviation threshold `(measured)`
-- Assembled output verified page-for-page identical to a prior reference, 21 of 21 pages `(measured)`
+- Rebuilt pages re-typeset onto a house template, gated by a lost-words check so nothing ships silently `(measured)`
 - Shipped with a test suite on fictional data in a public repository `(measured)`
 
 **Demonstrates:** measure-before-fixing discipline, low-level PDF and document
@@ -52,7 +96,7 @@ engineering, designing for graceful degradation, test coverage on a public repo.
 
 ---
 
-## 2. Standardizing a document header across a multi-source deliverable
+## 3. Standardizing a document header across a multi-source deliverable
 
 **Situation.** The firm header block (name, address, website) drifted across the
 assembled document: several font sizes, multiple address spellings, five
@@ -90,7 +134,7 @@ against real output, public-repo hygiene, defensive fallbacks.
 
 ---
 
-## 3. A cost- and privacy-conscious classifier with a deterministic fallback
+## 4. A cost- and privacy-conscious classifier with a deterministic fallback
 
 **Situation.** One section of the submittal lists professional-service categories
 that must be reconciled against a government agency's annually-published lettered
